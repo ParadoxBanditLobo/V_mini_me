@@ -1,0 +1,27 @@
+LIBRARY kernel32.dll
+EXPORTS
+GetStdHandle
+ReadConsoleW
+WriteConsoleW
+GetModuleFileNameW
+GetCommandLineW
+GetFileAttributesW
+CreateFileW
+GetFileSize
+ReadFile
+WriteFile
+CloseHandle
+GetProcessHeap
+HeapAlloc
+HeapFree
+Sleep
+GetTickCount
+ExitProcess
+CreateThread
+WaitForMultipleObjects
+WaitForSingleObject
+InterlockedExchange
+InterlockedCompareExchange
+WideCharToMultiByte
+MultiByteToWideChar
+GetModuleHandleW

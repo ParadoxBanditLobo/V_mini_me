@@ -1,0 +1,65 @@
+# -----------------------------------------------------------------------------
+# Privacy / machine-local files
+# -----------------------------------------------------------------------------
+# Runtime config is intentionally local. It may contain absolute avatar paths,
+# microphone device names/IDs, window position, and other machine-specific data.
+/config.ini
+/config.local.ini
+/config.private.ini
+
+# Environment, credentials, secrets, and private keys
+.env
+.env.*
+!.env.example
+/secrets/
+/private/
+/credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Personal/custom avatar packs are local by default. Keep only the bundled
+# example avatar tracked; use git add -f intentionally for contributed packs.
+/avatar/*
+!/avatar/default/
+!/avatar/default/**
+
+# Logs, dumps, and crash data
+*.log
+*.dump
+*.dmp
+core
+core.*
+
+# -----------------------------------------------------------------------------
+# Build output
+# -----------------------------------------------------------------------------
+/V_mini_me
+/V_mini_me.exe
+/src/*.o
+/tests/test_direction
+*.o
+*.obj
+*.lib
+*.pdb
+/build/
+/bin/
+/out-windows-x64/
+*.zip
+*.tar.gz
+*.7z
+
+# -----------------------------------------------------------------------------
+# Editor / OS-local files
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

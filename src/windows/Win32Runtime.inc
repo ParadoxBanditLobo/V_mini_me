@@ -1,0 +1,278 @@
+// -------------------------------------------------------------------------
+// Avatar session thread and runtime console commands
+// -------------------------------------------------------------------------
+
+DWORD WINAPI avatarThread(LPVOID parameter) {
+    AppConfig* config = (AppConfig*)parameter;
+    AvatarSet avatar{};
+    if (!loadAvatar(*config, avatar)) {
+        InterlockedExchange(&gSessionResult, ACTION_SETUP);
+        return 0;
+    }
+
+    WindowContext window{};
+    if (!createAvatarWindow(window, avatar, *config)) {
+        writeLine(L"Error: could not create the transparent Windows avatar window.");
+        freeAvatar(avatar);
+        InterlockedExchange(&gSessionResult, ACTION_SETUP);
+        return 0;
+    }
+
+    MicrophoneMonitor microphone{};
+    if (config->microphoneEnabled && !startMicrophone(microphone, *config)) {
+        writeLine(L"Warning: microphone reaction is unavailable; continuing without it.");
+        stopMicrophone(microphone);
+    }
+
+    DWORD now = GetTickCount();
+    DWORD nextDirectionUpdate = now;
+    DWORD lastVoiceActivity = now;
+    DWORD talkingStarted = now;
+    int currentDirection = DIR_CENTER;
+    bool currentTalking = false;
+    int currentBounce = 0;
+
+    while (true) {
+        MSG message{};
+        bool quitMessage = false;
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+            if (message.message == 0x0012) { quitMessage = true; break; } // WM_QUIT
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+        LONG action = InterlockedCompareExchange(&gRequestedAction, ACTION_NONE, ACTION_NONE);
+        if (quitMessage && action == ACTION_NONE) action = ACTION_QUIT;
+        if (action != ACTION_NONE) {
+            InterlockedExchange(&gSessionResult, action);
+            break;
+        }
+
+        now = GetTickCount();
+        int nextDirection = currentDirection;
+        bool nextTalking = currentTalking;
+        int nextBounce = currentBounce;
+
+        if ((long)(now - nextDirectionUpdate) >= 0) {
+            POINT mouse{};
+            if (GetCursorPos(&mouse)) {
+                nextDirection = determineDirection(mouse.x, mouse.y,
+                    GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+                    config->deadzoneMilli, config->directionMode);
+            }
+            nextDirectionUpdate = now + (DWORD)config->updateMs;
+        }
+
+        if (microphone.available) {
+            if (microphoneLoud(microphone)) {
+                lastVoiceActivity = now;
+                if (!nextTalking) {
+                    nextTalking = true;
+                    talkingStarted = now;
+                }
+            } else if (nextTalking && (DWORD)(now - lastVoiceActivity) >= (DWORD)config->microphoneReleaseMs) {
+                nextTalking = false;
+            }
+        } else {
+            nextTalking = false;
+        }
+
+        if (nextTalking && config->talkingBounce && config->bouncePixels > 0) {
+            DWORD phase = (now - talkingStarted) / (DWORD)config->bounceIntervalMs;
+            nextBounce = (phase % 2 == 0) ? config->bouncePixels : 0;
+        } else {
+            nextBounce = 0;
+        }
+
+        if (nextDirection != currentDirection || nextTalking != currentTalking || nextBounce != currentBounce) {
+            currentDirection = nextDirection;
+            currentTalking = nextTalking;
+            currentBounce = nextBounce;
+            window.direction = currentDirection;
+            window.talking = currentTalking;
+            window.bounce = currentBounce;
+            renderWindow(window);
+        }
+        Sleep(5);
+    }
+
+    config->windowX = window.baseX;
+    config->windowY = window.baseY;
+    stopMicrophone(microphone);
+    destroyAvatarWindow(window);
+    freeAvatar(avatar);
+    return 0;
+}
+
+void printRuntimeHelp() {
+    writeLine(L"");
+    writeLine(L"V_mini_me is running.");
+    writeLine(L"  Left-drag avatar : move it");
+    writeLine(L"  Right-click avatar: return to setup");
+    writeLine(L"  S / setup         : return to setup");
+    writeLine(L"  R / reload        : reload config/avatar");
+    writeLine(L"  H / help          : show these commands");
+    writeLine(L"  Q / quit          : exit");
+    writeLine(L"");
+}
+
+LONG runSession(AppConfig& config) {
+    InterlockedExchange(&gRequestedAction, ACTION_NONE);
+    InterlockedExchange(&gSessionResult, ACTION_NONE);
+    DWORD threadId = 0;
+    HANDLE thread = CreateThread(nullptr, 0, avatarThread, &config, 0, &threadId);
+    if (!thread) {
+        writeLine(L"Error: could not start avatar session thread.");
+        return ACTION_QUIT;
+    }
+    printRuntimeHelp();
+    HANDLE waits[2] = {thread, GetStdHandle(STD_INPUT_HANDLE)};
+
+    while (true) {
+        DWORD result = WaitForMultipleObjects(2, waits, FALSE_VALUE, INFINITE_WAIT);
+        if (result == WAIT_OBJECT_0) break;
+        if (result == WAIT_OBJECT_0 + 1) {
+            wchar_t command[kLineCapacity];
+            if (!readLine(command, kLineCapacity)) {
+                InterlockedExchange(&gRequestedAction, ACTION_QUIT);
+                continue;
+            }
+            if (wequalInsensitive(command, L"s") || wequalInsensitive(command, L"setup")) {
+                InterlockedExchange(&gRequestedAction, ACTION_SETUP);
+            } else if (wequalInsensitive(command, L"r") || wequalInsensitive(command, L"reload")) {
+                InterlockedExchange(&gRequestedAction, ACTION_RELOAD);
+            } else if (wequalInsensitive(command, L"q") || wequalInsensitive(command, L"quit")) {
+                InterlockedExchange(&gRequestedAction, ACTION_QUIT);
+            } else if (wequalInsensitive(command, L"h") || wequalInsensitive(command, L"help")) {
+                printRuntimeHelp();
+            } else if (command[0]) {
+                writeLine(L"Unknown command. Type H for help.");
+            }
+        }
+    }
+    WaitForSingleObject(thread, INFINITE_WAIT);
+    CloseHandle(thread);
+    LONG result = InterlockedCompareExchange(&gSessionResult, ACTION_NONE, ACTION_NONE);
+    saveConfig(config); // Also remembers a dragged window position.
+    return result == ACTION_NONE ? ACTION_QUIT : result;
+}
+
+// -------------------------------------------------------------------------
+// Text-only setup menu
+// -------------------------------------------------------------------------
+
+void printSetup(const AppConfig& config) {
+    writeLine(L"");
+    writeLine(L"========================================");
+    writeLine(L"            V_MINI_ME SETUP");
+    writeLine(L"========================================");
+    writeText(L"  1. Avatar folder      "); writeLine(config.avatarDir);
+    writeText(L"  2. Scale              "); writeFixedMilli(config.scaleMilli); writeLine(L"");
+    writeText(L"  3. Direction mode     "); writeLine(modeNameW(config.directionMode));
+    writeText(L"  4. Microphone         "); writeLine(config.microphoneEnabled ? L"ON" : L"OFF");
+    writeText(L"  5. Talking bounce     "); writeLine(config.talkingBounce ? L"ON" : L"OFF");
+    writeText(L"  6. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
+    writeLine(L"");
+    writeLine(L"  S. Save and start");
+    writeLine(L"  Q. Save and quit");
+    writeLine(L"");
+    writeText(L"Select: ");
+}
+
+bool runSetup(AppConfig& config) {
+    while (true) {
+        printSetup(config);
+        wchar_t input[kLineCapacity];
+        if (!readLine(input, kLineCapacity)) return false;
+        if (wequalInsensitive(input, L"s")) {
+            clampConfig(config);
+            saveConfig(config);
+            return true;
+        }
+        if (wequalInsensitive(input, L"q")) {
+            clampConfig(config);
+            saveConfig(config);
+            return false;
+        }
+        int option = parseIntW(input, 0);
+        if (option == 1) {
+            writeLine(L"Enter an avatar folder path.");
+            writeLine(L"Relative paths are resolved from the V_mini_me.exe folder.");
+            writeText(L"Path: ");
+            if (readLine(input, kLineCapacity) && input[0]) wcopy(config.avatarDir, kPathCapacity, input);
+        } else if (option == 2) {
+            writeLine(L"Scale examples: 0.5 = half, 1.0 = original, 2.0 = double");
+            writeText(L"Scale (0.10 to 8.00): ");
+            if (readLine(input, kLineCapacity)) config.scaleMilli = parseFixedW(input, 1000, config.scaleMilli);
+            clampConfig(config);
+        } else if (option == 3) {
+            writeLine(L"1. horizontal   2. fourway   3. quadrants   4. eightway");
+            writeText(L"Mode: ");
+            if (readLine(input, kLineCapacity)) {
+                int mode = parseIntW(input, 4);
+                if (mode >= 1 && mode <= 4) config.directionMode = (DirectionMode)(mode - 1);
+            }
+        } else if (option == 4) {
+            config.microphoneEnabled = !config.microphoneEnabled;
+        } else if (option == 5) {
+            config.talkingBounce = !config.talkingBounce;
+        } else if (option == 6) {
+            config.showSetupOnStart = !config.showSetupOnStart;
+        }
+    }
+}
+
+bool commandHasSetupFlag() {
+    const wchar_t* command = GetCommandLineW();
+    const wchar_t* token = L"--setup";
+    int tokenLength = wlen(token);
+    for (int i = 0; command && command[i]; ++i) {
+        int j = 0;
+        while (j < tokenLength && command[i + j] == token[j]) ++j;
+        if (j == tokenLength) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+extern "C" void mainCRTStartup() {
+    initializePaths();
+    gInstance = (HINSTANCE)GetModuleHandleW(nullptr);
+
+    GdiplusStartupInput gdiplusInput{};
+    gdiplusInput.GdiplusVersion = 1;
+    if (GdiplusStartup(&gGdiPlusToken, &gdiplusInput, nullptr) != 0) {
+        writeLine(L"V_mini_me could not initialize Windows PNG support (GDI+).");
+        ExitProcess(1);
+    }
+
+    AppConfig config{};
+    bool existed = loadConfig(config);
+    if (!existed) {
+        setDefaults(config);
+        saveConfig(config);
+    }
+
+    bool showSetup = commandHasSetupFlag() || config.showSetupOnStart;
+    bool running = true;
+    while (running) {
+        if (showSetup) {
+            if (!runSetup(config)) break;
+        }
+        LONG result = runSession(config);
+        if (result == ACTION_QUIT) {
+            running = false;
+        } else if (result == ACTION_SETUP) {
+            loadConfig(config);
+            showSetup = true;
+        } else if (result == ACTION_RELOAD) {
+            loadConfig(config);
+            showSetup = false;
+        } else {
+            running = false;
+        }
+    }
+
+    GdiplusShutdown(gGdiPlusToken);
+    ExitProcess(0);
+}

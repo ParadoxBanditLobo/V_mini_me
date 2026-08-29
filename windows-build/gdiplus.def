@@ -1,0 +1,10 @@
+LIBRARY gdiplus.dll
+EXPORTS
+GdiplusStartup
+GdiplusShutdown
+GdipCreateBitmapFromFile
+GdipGetImageWidth
+GdipGetImageHeight
+GdipBitmapLockBits
+GdipBitmapUnlockBits
+GdipDisposeImage
