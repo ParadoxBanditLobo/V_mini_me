@@ -31,21 +31,19 @@ Status: implemented.
 
 A gentle configurable vertical movement around the avatar's normal resting position.
 
-Settings:
-
 ```ini
 idle_bob=false
 idle_bob_pixels=3
 idle_bob_period_ms=2400
 ```
 
-The implementation is positional only, with no physics or animation subsystem. It is off by default so existing configurations keep their previous appearance.
+The implementation is positional only, with no physics or animation subsystem.
 
 ### 2. Idle sway
 
-Add the same lightweight concept horizontally.
+Status: implemented.
 
-Likely settings:
+The same lightweight idea horizontally. Bob and sway are independent.
 
 ```ini
 idle_sway=false
@@ -53,54 +51,58 @@ idle_sway_pixels=2
 idle_sway_period_ms=3000
 ```
 
-Bob and sway should remain independent so either can be disabled completely.
+### 3. Folder-based expression switching
 
-### 3. Blinking
-
-Allow optional directional blink images such as:
-
-```text
-center_blink.png
-left_blink.png
-right_blink.png
-...
-```
-
-Use a simple randomized timer. Missing blink images should fall back to the normal image.
-
-### 4. Expression hotkeys
-
-Allow a small number of hotkeys to switch avatar sets or expressions.
-
-Keep this deliberately small. Do not build a scripting system or general state machine around it.
-
-### 5. Multi-PNG boil animation
-
-Allow a small number of alternate PNG frames per state for hand-drawn or boiling-lineart animation.
+Treat each expression as another normal avatar folder rather than introducing a new image/state format.
 
 Example:
 
 ```text
-center.png
-center_2.png
-center_3.png
+avatar/
+├── default/
+├── happy/
+├── annoyed/
+└── surprised/
 ```
 
-Possible controls:
+A small number of configurable hotkeys should switch between these folders quickly. Each folder keeps the same normal directional/talking file rules, so expression switching reuses the existing avatar-loading model.
+
+Prefer a simple folder swap/reload over a general state machine.
+
+### 4. Looping PNG frames
+
+This replaces the earlier separate blinking and "boil animation" ideas with one mechanism.
+
+Users draw the frames themselves and V_mini_me simply loops through sequential PNG files for the active direction/state.
+
+Example:
+
+```text
+up.png
+up_2.png
+up_3.png
+
+up_talking.png
+up_talking_2.png
+up_talking_3.png
+```
+
+The same mechanism can be used for hand-drawn boiling lineart, blinking, breathing, or other tiny loops. Missing extra frames should simply mean that state stays static.
+
+Likely controls:
 
 ```ini
-animation_enabled=true
-animation_fps=6
-animation_random=true
+loop_animation=true
+loop_fps=6
 ```
 
-Prefer a small fixed PNG frame set over adding a general animation engine. GIF support is not currently planned.
+Keep frame discovery and playback deliberately simple. GIF support is not planned.
 
-### 6. Optional graphical launcher
+### 5. Optional graphical launcher
 
-This should be the last planned addition.
+This is the final planned addition.
 
-The preferred design is a separate optional launcher/configuration utility, likely using raylib + raygui. It should not be linked into the core avatar runtime.
+The preferred design is a separate optional launcher/configuration utility, likely using raylib + raygui. It must not be linked into the core avatar runtime.
 
 Proposed layout:
 
@@ -140,17 +142,16 @@ Unless the project's goals change substantially, avoid adding:
 
 ## Release direction
 
-A sensible path toward a stable 1.0 is:
-
 1. Keep the existing directional and microphone behavior stable.
 2. Idle bob. Done.
-3. Add idle sway.
-4. Consider blinking.
-5. Test Linux and Windows after each addition.
-6. Improve documentation and configuration examples as features settle.
-7. Declare 1.0 once the core behavior, configuration, and cross-platform builds are dependable.
+3. Idle sway. Done.
+4. Add folder-based expression switching.
+5. Add lightweight looping PNG frames if the folder-switching work remains stable.
+6. Test Linux and Windows after meaningful groups of changes.
+7. Improve documentation/config examples as features settle.
+8. Build the optional graphical launcher last.
 
-Expression hotkeys, multi-PNG animation, and the optional GUI launcher do not need to block 1.0.
+The launcher does not need to block a core 1.0 release.
 
 ## Decision rule for future features
 

@@ -5,6 +5,10 @@
 bool gIdleBob = false;
 int gIdleBobPixels = 3;
 int gIdleBobPeriodMs = 2400;
+bool gIdleSway = false;
+int gIdleSwayPixels = 2;
+int gIdleSwayPeriodMs = 3000;
+int gCurrentSwayOffset = 0;
 
 void setDefaults(AppConfig& config) {
     memset(&config, 0, sizeof(config));
@@ -28,6 +32,10 @@ void setDefaults(AppConfig& config) {
     gIdleBob = false;
     gIdleBobPixels = 3;
     gIdleBobPeriodMs = 2400;
+    gIdleSway = false;
+    gIdleSwayPixels = 2;
+    gIdleSwayPeriodMs = 3000;
+    gCurrentSwayOffset = 0;
 }
 
 bool isAbsolutePath(const wchar_t* path) {
@@ -149,6 +157,12 @@ void applyConfigValue(AppConfig& config, const char* key, int keyLength, const c
         gIdleBobPixels = parseIntA(value, valueLength, gIdleBobPixels);
     } else if (akeyEqual(key, keyLength, "idle_bob_period_ms")) {
         gIdleBobPeriodMs = parseIntA(value, valueLength, gIdleBobPeriodMs);
+    } else if (akeyEqual(key, keyLength, "idle_sway")) {
+        gIdleSway = parseBoolA(value, valueLength, gIdleSway);
+    } else if (akeyEqual(key, keyLength, "idle_sway_pixels")) {
+        gIdleSwayPixels = parseIntA(value, valueLength, gIdleSwayPixels);
+    } else if (akeyEqual(key, keyLength, "idle_sway_period_ms")) {
+        gIdleSwayPeriodMs = parseIntA(value, valueLength, gIdleSwayPeriodMs);
     }
 }
 
@@ -169,6 +183,10 @@ void clampConfig(AppConfig& config) {
     if (gIdleBobPixels > 200) gIdleBobPixels = 200;
     if (gIdleBobPeriodMs < 200) gIdleBobPeriodMs = 200;
     if (gIdleBobPeriodMs > 30000) gIdleBobPeriodMs = 30000;
+    if (gIdleSwayPixels < 0) gIdleSwayPixels = 0;
+    if (gIdleSwayPixels > 200) gIdleSwayPixels = 200;
+    if (gIdleSwayPeriodMs < 200) gIdleSwayPeriodMs = 200;
+    if (gIdleSwayPeriodMs > 30000) gIdleSwayPeriodMs = 30000;
 }
 
 bool loadConfig(AppConfig& config) {
@@ -277,6 +295,9 @@ bool saveConfig(const AppConfig& config) {
     appendA(output, outputCapacity, at, "\r\n\r\n# Idle motion\r\nidle_bob="); appendA(output, outputCapacity, at, gIdleBob ? "true" : "false");
     appendA(output, outputCapacity, at, "\r\nidle_bob_pixels="); appendIntA(output, outputCapacity, at, gIdleBobPixels);
     appendA(output, outputCapacity, at, "\r\nidle_bob_period_ms="); appendIntA(output, outputCapacity, at, gIdleBobPeriodMs);
+    appendA(output, outputCapacity, at, "\r\nidle_sway="); appendA(output, outputCapacity, at, gIdleSway ? "true" : "false");
+    appendA(output, outputCapacity, at, "\r\nidle_sway_pixels="); appendIntA(output, outputCapacity, at, gIdleSwayPixels);
+    appendA(output, outputCapacity, at, "\r\nidle_sway_period_ms="); appendIntA(output, outputCapacity, at, gIdleSwayPeriodMs);
     appendA(output, outputCapacity, at, "\r\n");
 
     HANDLE file = CreateFileW(gConfigPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

@@ -165,7 +165,8 @@ void printSetupScreen(const AppConfig& config, const std::filesystem::path& conf
               << "  4. Microphone         " << yesNo(config.microphoneEnabled) << '\n'
               << "  5. Talking bounce     " << yesNo(config.talkingBounce) << '\n'
               << "  6. Idle bob           " << yesNo(config.idleBob) << '\n'
-              << "  7. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
+              << "  7. Idle sway          " << yesNo(config.idleSway) << '\n'
+              << "  8. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
               << "\n"
               << "  S. Save and start\n"
               << "  Q. Save and quit\n"
@@ -203,6 +204,8 @@ SetupMenuResult runSetupMenu(
         } else if (input == "6") {
             config.idleBob = !config.idleBob;
         } else if (input == "7") {
+            config.idleSway = !config.idleSway;
+        } else if (input == "8") {
             config.showSetupOnStart = !config.showSetupOnStart;
         } else if (input == "s" || input == "start") {
             saveConfig(config, configPath.string());

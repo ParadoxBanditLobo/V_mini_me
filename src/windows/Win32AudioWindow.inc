@@ -79,7 +79,7 @@ void renderWindow(WindowContext& context) {
     SIZE_T canvasBytes = (SIZE_T)context.width * context.height * 4;
     memset(context.canvasBits, 0, canvasBytes);
 
-    int startX = (context.width - image->width) / 2;
+    int startX = (context.width - image->width) / 2 + gCurrentSwayOffset;
     int startY = context.bounceMargin + (context.avatar->maxHeight - image->height) / 2 - context.bounce;
     for (int y = 0; y < image->height; ++y) {
         int dstY = startY + y;
@@ -170,8 +170,10 @@ bool createAvatarWindow(WindowContext& context, AvatarSet& avatar, AppConfig& co
     context.config = &config;
     const int talkingMargin = config.talkingBounce ? config.bouncePixels : 0;
     const int idleMargin = gIdleBob ? gIdleBobPixels : 0;
+    const int swayMargin = gIdleSway ? gIdleSwayPixels : 0;
     context.bounceMargin = talkingMargin + idleMargin;
-    context.width = avatar.maxWidth > 0 ? avatar.maxWidth : 1;
+    context.width = avatar.maxWidth + swayMargin * 2;
+    if (context.width < 1) context.width = 1;
     context.height = avatar.maxHeight + context.bounceMargin * 2;
     if (context.height < 1) context.height = 1;
     context.baseX = config.windowX;

@@ -2,24 +2,24 @@
 // Avatar session thread and runtime console commands
 // -------------------------------------------------------------------------
 
-int idleBobOffset(DWORD elapsed) {
-    if (!gIdleBob || gIdleBobPixels <= 0 || gIdleBobPeriodMs <= 0) return 0;
+int idleMotionOffset(DWORD elapsed, bool enabled, int pixels, int periodMs) {
+    if (!enabled || pixels <= 0 || periodMs <= 0) return 0;
 
-    const DWORD period = (DWORD)gIdleBobPeriodMs;
+    const DWORD period = (DWORD)periodMs;
     const DWORD quarter = period / 4;
     if (quarter == 0) return 0;
     const DWORD phase = elapsed % period;
 
     if (phase < quarter) {
-        return (int)((phase * (DWORD)gIdleBobPixels) / quarter);
+        return (int)((phase * (DWORD)pixels) / quarter);
     }
     if (phase < quarter * 2) {
-        return gIdleBobPixels - (int)(((phase - quarter) * (DWORD)gIdleBobPixels) / quarter);
+        return pixels - (int)(((phase - quarter) * (DWORD)pixels) / quarter);
     }
     if (phase < quarter * 3) {
-        return -(int)(((phase - quarter * 2) * (DWORD)gIdleBobPixels) / quarter);
+        return -(int)(((phase - quarter * 2) * (DWORD)pixels) / quarter);
     }
-    return -gIdleBobPixels + (int)(((phase - quarter * 3) * (DWORD)gIdleBobPixels) / quarter);
+    return -pixels + (int)(((phase - quarter * 3) * (DWORD)pixels) / quarter);
 }
 
 DWORD WINAPI avatarThread(LPVOID parameter) {
@@ -52,6 +52,8 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
     int currentDirection = DIR_CENTER;
     bool currentTalking = false;
     int currentVerticalOffset = 0;
+    int currentHorizontalOffset = 0;
+    gCurrentSwayOffset = 0;
 
     while (true) {
         MSG message{};
@@ -102,12 +104,21 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
             talkingOffset = (phase % 2 == 0) ? config->bouncePixels : 0;
         }
 
-        const int nextVerticalOffset = talkingOffset + idleBobOffset(now - sessionStarted);
+        const DWORD idleElapsed = now - sessionStarted;
+        const int bobOffset = idleMotionOffset(idleElapsed, gIdleBob, gIdleBobPixels, gIdleBobPeriodMs);
+        const int swayOffset = idleMotionOffset(idleElapsed, gIdleSway, gIdleSwayPixels, gIdleSwayPeriodMs);
+        const int nextVerticalOffset = talkingOffset + bobOffset;
+        const int nextHorizontalOffset = swayOffset;
 
-        if (nextDirection != currentDirection || nextTalking != currentTalking || nextVerticalOffset != currentVerticalOffset) {
+        if (nextDirection != currentDirection ||
+            nextTalking != currentTalking ||
+            nextVerticalOffset != currentVerticalOffset ||
+            nextHorizontalOffset != currentHorizontalOffset) {
             currentDirection = nextDirection;
             currentTalking = nextTalking;
             currentVerticalOffset = nextVerticalOffset;
+            currentHorizontalOffset = nextHorizontalOffset;
+            gCurrentSwayOffset = currentHorizontalOffset;
             window.direction = currentDirection;
             window.talking = currentTalking;
             window.bounce = currentVerticalOffset;
@@ -116,6 +127,7 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
         Sleep(5);
     }
 
+    gCurrentSwayOffset = 0;
     config->windowX = window.baseX;
     config->windowY = window.baseY;
     stopMicrophone(microphone);
@@ -192,7 +204,8 @@ void printSetup(const AppConfig& config) {
     writeText(L"  4. Microphone         "); writeLine(config.microphoneEnabled ? L"ON" : L"OFF");
     writeText(L"  5. Talking bounce     "); writeLine(config.talkingBounce ? L"ON" : L"OFF");
     writeText(L"  6. Idle bob           "); writeLine(gIdleBob ? L"ON" : L"OFF");
-    writeText(L"  7. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
+    writeText(L"  7. Idle sway          "); writeLine(gIdleSway ? L"ON" : L"OFF");
+    writeText(L"  8. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
     writeLine(L"");
     writeLine(L"  S. Save and start");
     writeLine(L"  Q. Save and quit");
@@ -240,6 +253,8 @@ bool runSetup(AppConfig& config) {
         } else if (option == 6) {
             gIdleBob = !gIdleBob;
         } else if (option == 7) {
+            gIdleSway = !gIdleSway;
+        } else if (option == 8) {
             config.showSetupOnStart = !config.showSetupOnStart;
         }
     }

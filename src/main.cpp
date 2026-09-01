@@ -69,19 +69,21 @@ CommandLineOptions parseCommandLine(
     return options;
 }
 
-int idleBobOffset(
+int sinusoidalOffset(
     std::chrono::steady_clock::time_point now,
     std::chrono::steady_clock::time_point started,
-    const AppConfig& config) {
+    bool enabled,
+    int pixels,
+    int periodMilliseconds) {
 
-    if (!config.idleBob || config.idleBobPixels <= 0 || config.idleBobPeriodMilliseconds <= 0) {
+    if (!enabled || pixels <= 0 || periodMilliseconds <= 0) {
         return 0;
     }
 
     constexpr double tau = 6.28318530717958647692;
     const double elapsedMs = std::chrono::duration<double, std::milli>(now - started).count();
-    const double phase = tau * elapsedMs / static_cast<double>(config.idleBobPeriodMilliseconds);
-    return static_cast<int>(std::lround(std::sin(phase) * config.idleBobPixels));
+    const double phase = tau * elapsedMs / static_cast<double>(periodMilliseconds);
+    return static_cast<int>(std::lround(std::sin(phase) * pixels));
 }
 
 SessionResult runAvatarSession(
@@ -90,13 +92,17 @@ SessionResult runAvatarSession(
 
     AvatarSet avatar(resolvedAvatarDirectory(base, config).string());
 
-    const int bounceMargin = config.talkingBounce ? config.bouncePixels : 0;
-    const int idleMargin = config.idleBob ? config.idleBobPixels : 0;
-    const int motionMargin = bounceMargin + idleMargin;
-    const int windowWidth = std::max(1, static_cast<int>(std::ceil(avatar.maxWidth() * config.scale)));
+    const int talkingMargin = config.talkingBounce ? config.bouncePixels : 0;
+    const int bobMargin = config.idleBob ? config.idleBobPixels : 0;
+    const int swayMargin = config.idleSway ? config.idleSwayPixels : 0;
+    const int verticalMargin = talkingMargin + bobMargin;
+
+    const int windowWidth = std::max(
+        1,
+        static_cast<int>(std::ceil(avatar.maxWidth() * config.scale)) + swayMargin * 2);
     const int windowHeight = std::max(
         1,
-        static_cast<int>(std::ceil(avatar.maxHeight() * config.scale)) + motionMargin * 2);
+        static_cast<int>(std::ceil(avatar.maxHeight() * config.scale)) + verticalMargin * 2);
 
     X11AvatarWindow window(
         windowWidth,
@@ -122,8 +128,13 @@ SessionResult runAvatarSession(
     Direction currentDirection = Direction::Center;
     bool currentTalking = false;
     int currentVerticalOffset = 0;
+    int currentHorizontalOffset = 0;
 
-    window.draw(avatar.imageFor(currentDirection, currentTalking), config.scale, currentVerticalOffset);
+    window.draw(
+        avatar.imageFor(currentDirection, currentTalking),
+        config.scale,
+        currentVerticalOffset,
+        currentHorizontalOffset);
     printRuntimeHelp();
 
     const auto directionInterval = std::chrono::milliseconds(config.updateMilliseconds);
@@ -181,18 +192,35 @@ SessionResult runAvatarSession(
             talkingOffset = (phase % 2 == 0) ? config.bouncePixels : 0;
         }
 
-        const int nextVerticalOffset = talkingOffset + idleBobOffset(now, sessionStarted, config);
+        const int bobOffset = sinusoidalOffset(
+            now,
+            sessionStarted,
+            config.idleBob,
+            config.idleBobPixels,
+            config.idleBobPeriodMilliseconds);
+        const int swayOffset = sinusoidalOffset(
+            now,
+            sessionStarted,
+            config.idleSway,
+            config.idleSwayPixels,
+            config.idleSwayPeriodMilliseconds);
+
+        const int nextVerticalOffset = talkingOffset + bobOffset;
+        const int nextHorizontalOffset = swayOffset;
 
         if (nextDirection != currentDirection ||
             nextTalking != currentTalking ||
-            nextVerticalOffset != currentVerticalOffset) {
+            nextVerticalOffset != currentVerticalOffset ||
+            nextHorizontalOffset != currentHorizontalOffset) {
             currentDirection = nextDirection;
             currentTalking = nextTalking;
             currentVerticalOffset = nextVerticalOffset;
+            currentHorizontalOffset = nextHorizontalOffset;
             window.draw(
                 avatar.imageFor(currentDirection, currentTalking),
                 config.scale,
-                currentVerticalOffset);
+                currentVerticalOffset,
+                currentHorizontalOffset);
         }
 
         switch (waitForRuntimeCommand(5)) {

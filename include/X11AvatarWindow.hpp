@@ -16,9 +16,9 @@ public:
     X11AvatarWindow& operator=(const X11AvatarWindow&) = delete;
 
     bool processEvents();
-    // Draws an image centered in the transparent window. A positive vertical
-    // offset moves the avatar upward and is used for the talking bounce.
-    void draw(const PngImage& image, double scale, int verticalOffset = 0);
+    // Draws an image centered in the transparent window. Positive offsets move
+    // the avatar right/up and are used for lightweight idle/talking motion.
+    void draw(const PngImage& image, double scale, int verticalOffset = 0, int horizontalOffset = 0);
     bool queryPointer(int& x, int& y) const;
 
     // Right-click requests the text setup menu instead of terminating the app.

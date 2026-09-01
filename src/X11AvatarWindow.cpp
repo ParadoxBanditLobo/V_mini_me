@@ -10,7 +10,6 @@
 #include <stdexcept>
 
 namespace {
-// Motif hint structure used by many X11 window managers to disable decorations.
 struct MotifWmHints {
     unsigned long flags;
     unsigned long functions;
@@ -133,7 +132,7 @@ void X11AvatarWindow::chooseVisual() {
 void X11AvatarWindow::removeDecorations() {
     Atom property = XInternAtom(display_, "_MOTIF_WM_HINTS", False);
     MotifWmHints hints{};
-    hints.flags = 1UL << 1; // MWM_HINTS_DECORATIONS
+    hints.flags = 1UL << 1;
     hints.decorations = 0;
     XChangeProperty(display_, window_, property, property, 32, PropModeReplace,
                     reinterpret_cast<unsigned char*>(&hints), 5);
@@ -152,7 +151,6 @@ unsigned long X11AvatarWindow::packPixel(
     std::uint8_t b,
     std::uint8_t a) const {
 
-    // ARGB compositors expect color channels premultiplied by alpha.
     const std::uint8_t pr = static_cast<std::uint8_t>((static_cast<unsigned int>(r) * a + 127) / 255);
     const std::uint8_t pg = static_cast<std::uint8_t>((static_cast<unsigned int>(g) * a + 127) / 255);
     const std::uint8_t pb = static_cast<std::uint8_t>((static_cast<unsigned int>(b) * a + 127) / 255);
@@ -169,7 +167,12 @@ unsigned long X11AvatarWindow::packPixel(
     return pixel;
 }
 
-void X11AvatarWindow::draw(const PngImage& image, double scale, int verticalOffset) {
+void X11AvatarWindow::draw(
+    const PngImage& image,
+    double scale,
+    int verticalOffset,
+    int horizontalOffset) {
+
     if (image.empty()) return;
 
     XImage* ximage = XCreateImage(
@@ -188,7 +191,7 @@ void X11AvatarWindow::draw(const PngImage& image, double scale, int verticalOffs
 
     const int outputWidth = std::max(1, static_cast<int>(std::lround(image.width * scale)));
     const int outputHeight = std::max(1, static_cast<int>(std::lround(image.height * scale)));
-    const int startX = (width_ - outputWidth) / 2;
+    const int startX = (width_ - outputWidth) / 2 + horizontalOffset;
     const int startY = (height_ - outputHeight) / 2 - verticalOffset;
 
     for (int y = 0; y < outputHeight; ++y) {
@@ -222,8 +225,6 @@ bool X11AvatarWindow::processEvents() {
             return false;
         }
 
-        // Right-click returns control to the terminal setup menu. This keeps the
-        // borderless avatar simple without adding a graphical settings window.
         if (event.type == ButtonPress && event.xbutton.button == Button3) {
             setupRequested_ = true;
         }
@@ -259,7 +260,6 @@ int X11AvatarWindow::screenWidth() const {
 int X11AvatarWindow::screenHeight() const {
     return DisplayHeight(display_, screen_);
 }
-
 
 bool X11AvatarWindow::takeSetupRequest() {
     const bool requested = setupRequested_;

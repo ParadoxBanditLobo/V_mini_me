@@ -28,7 +28,6 @@ AppConfig loadConfig(const std::string& path) {
     AppConfig config;
     std::ifstream file(path);
 
-    // Missing config is not fatal; built-in defaults make the binary usable.
     if (!file) {
         return config;
     }
@@ -69,6 +68,9 @@ AppConfig loadConfig(const std::string& path) {
             else if (key == "idle_bob") config.idleBob = parseBool(value);
             else if (key == "idle_bob_pixels") config.idleBobPixels = std::clamp(std::stoi(value), 0, 200);
             else if (key == "idle_bob_period_ms") config.idleBobPeriodMilliseconds = std::clamp(std::stoi(value), 200, 30000);
+            else if (key == "idle_sway") config.idleSway = parseBool(value);
+            else if (key == "idle_sway_pixels") config.idleSwayPixels = std::clamp(std::stoi(value), 0, 200);
+            else if (key == "idle_sway_period_ms") config.idleSwayPeriodMilliseconds = std::clamp(std::stoi(value), 200, 30000);
         } catch (const std::exception&) {
             throw std::runtime_error("Invalid value for config key '" + key + "': " + value);
         }
@@ -115,5 +117,8 @@ void saveConfig(const AppConfig& config, const std::string& path) {
          << "# --- Idle motion ---\n"
          << "idle_bob=" << (config.idleBob ? "true" : "false") << "\n"
          << "idle_bob_pixels=" << config.idleBobPixels << "\n"
-         << "idle_bob_period_ms=" << config.idleBobPeriodMilliseconds << "\n";
+         << "idle_bob_period_ms=" << config.idleBobPeriodMilliseconds << "\n"
+         << "idle_sway=" << (config.idleSway ? "true" : "false") << "\n"
+         << "idle_sway_pixels=" << config.idleSwayPixels << "\n"
+         << "idle_sway_period_ms=" << config.idleSwayPeriodMilliseconds << "\n";
 }
