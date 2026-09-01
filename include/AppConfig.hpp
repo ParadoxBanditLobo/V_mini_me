@@ -2,6 +2,7 @@
 
 #include "Direction.hpp"
 
+#include <array>
 #include <string>
 
 // User-editable settings loaded from config.ini at startup.
@@ -42,6 +43,11 @@ struct AppConfig {
     bool idleSway = false;
     int idleSwayPixels = 2;
     int idleSwayPeriodMilliseconds = 3000;
+
+    // Optional folders available from the runtime Quick Expressions menu.
+    // Empty slots are hidden. Selecting one changes only the current runtime
+    // avatar; avatarDirectory remains the configured default.
+    std::array<std::string, 8> expressionDirectories{};
 };
 
 // Reads a deliberately small key=value INI-style file. Unknown keys are

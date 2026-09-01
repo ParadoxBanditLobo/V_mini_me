@@ -9,6 +9,9 @@ bool gIdleSway = false;
 int gIdleSwayPixels = 2;
 int gIdleSwayPeriodMs = 3000;
 int gCurrentSwayOffset = 0;
+wchar_t gExpressionDirs[8][kPathCapacity] = {};
+bool gRuntimeAvatarOverride = false;
+wchar_t gRuntimeAvatarDir[kPathCapacity] = {};
 
 void setDefaults(AppConfig& config) {
     memset(&config, 0, sizeof(config));
@@ -36,6 +39,7 @@ void setDefaults(AppConfig& config) {
     gIdleSwayPixels = 2;
     gIdleSwayPeriodMs = 3000;
     gCurrentSwayOffset = 0;
+    for (int i = 0; i < 8; ++i) gExpressionDirs[i][0] = 0;
 }
 
 bool isAbsolutePath(const wchar_t* path) {
@@ -116,6 +120,13 @@ const wchar_t* modeNameW(DirectionMode mode) {
     return L"eightway";
 }
 
+int expressionIndexA(const char* key, int keyLength) {
+    if (keyLength != 12) return -1;
+    if (!akeyEqual(key, 11, "expression_")) return -1;
+    if (key[11] < '1' || key[11] > '8') return -1;
+    return key[11] - '1';
+}
+
 void applyConfigValue(AppConfig& config, const char* key, int keyLength, const char* value, int valueLength) {
     if (akeyEqual(key, keyLength, "avatar_dir")) {
         decodeUtf8(value, valueLength, config.avatarDir, kPathCapacity);
@@ -163,6 +174,9 @@ void applyConfigValue(AppConfig& config, const char* key, int keyLength, const c
         gIdleSwayPixels = parseIntA(value, valueLength, gIdleSwayPixels);
     } else if (akeyEqual(key, keyLength, "idle_sway_period_ms")) {
         gIdleSwayPeriodMs = parseIntA(value, valueLength, gIdleSwayPeriodMs);
+    } else {
+        int expressionIndex = expressionIndexA(key, keyLength);
+        if (expressionIndex >= 0) decodeUtf8(value, valueLength, gExpressionDirs[expressionIndex], kPathCapacity);
     }
 }
 
@@ -260,24 +274,22 @@ void appendFixedA(char* buffer, int capacity, int& at, int value, int base, int 
 }
 
 bool saveConfig(const AppConfig& config) {
-    constexpr int outputCapacity = 8192;
+    constexpr int outputCapacity = 12288;
     char* output = (char*)HeapAlloc(GetProcessHeap(), 0, outputCapacity);
-    char* avatarUtf8 = (char*)HeapAlloc(GetProcessHeap(), 0, 1536);
-    if (!output || !avatarUtf8) {
+    char* pathUtf8 = (char*)HeapAlloc(GetProcessHeap(), 0, 1536);
+    if (!output || !pathUtf8) {
         if (output) HeapFree(GetProcessHeap(), 0, output);
-        if (avatarUtf8) HeapFree(GetProcessHeap(), 0, avatarUtf8);
+        if (pathUtf8) HeapFree(GetProcessHeap(), 0, pathUtf8);
         return false;
     }
     int at = 0;
     output[0] = 0;
-    encodeUtf8(config.avatarDir, avatarUtf8, 1536);
+    encodeUtf8(config.avatarDir, pathUtf8, 1536);
 
     appendA(output, outputCapacity, at, "# V_mini_me configuration\r\n# Paths are relative to the executable unless absolute.\r\n\r\navatar_dir=");
-    appendA(output, outputCapacity, at, avatarUtf8);
-    appendA(output, outputCapacity, at, "\r\ndirection_mode=");
-    appendA(output, outputCapacity, at, modeNameA(config.directionMode));
-    appendA(output, outputCapacity, at, "\r\ndeadzone=");
-    appendFixedA(output, outputCapacity, at, config.deadzoneMilli, 1000, 3);
+    appendA(output, outputCapacity, at, pathUtf8);
+    appendA(output, outputCapacity, at, "\r\ndirection_mode="); appendA(output, outputCapacity, at, modeNameA(config.directionMode));
+    appendA(output, outputCapacity, at, "\r\ndeadzone="); appendFixedA(output, outputCapacity, at, config.deadzoneMilli, 1000, 3);
     appendA(output, outputCapacity, at, "\r\nupdate_ms="); appendIntA(output, outputCapacity, at, config.updateMs);
     appendA(output, outputCapacity, at, "\r\nscale="); appendFixedA(output, outputCapacity, at, config.scaleMilli, 1000, 3);
     appendA(output, outputCapacity, at, "\r\nwindow_x="); appendIntA(output, outputCapacity, at, config.windowX);
@@ -298,18 +310,22 @@ bool saveConfig(const AppConfig& config) {
     appendA(output, outputCapacity, at, "\r\nidle_sway="); appendA(output, outputCapacity, at, gIdleSway ? "true" : "false");
     appendA(output, outputCapacity, at, "\r\nidle_sway_pixels="); appendIntA(output, outputCapacity, at, gIdleSwayPixels);
     appendA(output, outputCapacity, at, "\r\nidle_sway_period_ms="); appendIntA(output, outputCapacity, at, gIdleSwayPeriodMs);
-    appendA(output, outputCapacity, at, "\r\n");
+    appendA(output, outputCapacity, at, "\r\n\r\n# Quick expressions\r\n");
+    for (int i = 0; i < 8; ++i) {
+        appendA(output, outputCapacity, at, "expression_"); appendIntA(output, outputCapacity, at, i + 1); appendA(output, outputCapacity, at, "=");
+        encodeUtf8(gExpressionDirs[i], pathUtf8, 1536); appendA(output, outputCapacity, at, pathUtf8); appendA(output, outputCapacity, at, "\r\n");
+    }
 
     HANDLE file = CreateFileW(gConfigPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
-        HeapFree(GetProcessHeap(), 0, avatarUtf8);
+        HeapFree(GetProcessHeap(), 0, pathUtf8);
         HeapFree(GetProcessHeap(), 0, output);
         return false;
     }
     DWORD written = 0;
     BOOL ok = WriteFile(file, output, (DWORD)at, &written, nullptr);
     CloseHandle(file);
-    HeapFree(GetProcessHeap(), 0, avatarUtf8);
+    HeapFree(GetProcessHeap(), 0, pathUtf8);
     HeapFree(GetProcessHeap(), 0, output);
     return ok != 0 && written == (DWORD)at;
 }

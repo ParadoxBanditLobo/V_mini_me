@@ -49,9 +49,6 @@ bool loadPngScaled(const wchar_t* path, int scaleMilli, ImageBitmap& output) {
         return false;
     }
 
-    // Nearest-neighbor scaling is intentionally used here. Scaling happens only
-    // when an avatar is loaded, and this simple path avoids a persistent graphics
-    // framework or additional resampling dependency.
     for (int y = 0; y < targetHeight; ++y) {
         int sourceY = (int)(((long long)y * sourceHeight) / targetHeight);
         BYTE* sourceRow;
@@ -90,7 +87,8 @@ void buildAvatarPath(wchar_t* output, const wchar_t* avatarBase, int direction, 
 bool loadAvatar(const AppConfig& config, AvatarSet& avatar) {
     memset(&avatar, 0, sizeof(avatar));
     wchar_t avatarBase[kPathCapacity];
-    joinPath(avatarBase, kPathCapacity, gExeDirectory, config.avatarDir);
+    const wchar_t* configuredDir = gRuntimeAvatarOverride ? gRuntimeAvatarDir : config.avatarDir;
+    joinPath(avatarBase, kPathCapacity, gExeDirectory, configuredDir);
 
     wchar_t centerPath[kPathCapacity];
     buildAvatarPath(centerPath, avatarBase, DIR_CENTER, false);
@@ -161,8 +159,6 @@ int determineDirection(int mouseX, int mouseY, int screenWidth, int screenHeight
         return DIR_DOWN_RIGHT;
     }
 
-    // Eight-way sectors without atan2(): tan(22.5 degrees) ~= 0.414 and
-    // tan(67.5 degrees) ~= 2.414. Integer comparisons avoid a math runtime.
     if ((long long)absY * 1000000 <= (long long)absX * 414214) return dx < 0 ? DIR_LEFT : DIR_RIGHT;
     if ((long long)absY * 1000000 >= (long long)absX * 2414214) return dy < 0 ? DIR_UP : DIR_DOWN;
     if (dx < 0 && dy < 0) return DIR_UP_LEFT;

@@ -16,6 +16,7 @@ V_mini_me currently provides:
 - Microphone RMS detection.
 - Optional talking image variants.
 - Talking bounce.
+- Configurable idle bob and sway.
 - Avatar scaling.
 - Human-readable `config.ini`.
 - Text-based setup/control interface.
@@ -29,21 +30,15 @@ This baseline should remain the core of the project.
 
 Status: implemented.
 
-A gentle configurable vertical movement around the avatar's normal resting position.
-
 ```ini
 idle_bob=false
 idle_bob_pixels=3
 idle_bob_period_ms=2400
 ```
 
-The implementation is positional only, with no physics or animation subsystem.
-
 ### 2. Idle sway
 
 Status: implemented.
-
-The same lightweight idea horizontally. Bob and sway are independent.
 
 ```ini
 idle_sway=false
@@ -51,9 +46,11 @@ idle_sway_pixels=2
 idle_sway_period_ms=3000
 ```
 
-### 3. Folder-based expression switching
+### 3. Quick Expressions / runtime folder switching
 
-Treat each expression as another normal avatar folder rather than introducing a new image/state format.
+Status: implemented for the current test checkpoint.
+
+Each expression is another normal avatar folder rather than a new image/state format.
 
 Example:
 
@@ -65,13 +62,22 @@ avatar/
 └── surprised/
 ```
 
-A small number of configurable hotkeys should switch between these folders quickly. Each folder keeps the same normal directional/talking file rules, so expression switching reuses the existing avatar-loading model.
+Up to eight optional folders can be assigned in the nested Quick Expressions setup menu or with these config keys:
 
-Prefer a simple folder swap/reload over a general state machine.
+```ini
+expression_1=avatar/default
+expression_2=avatar/happy
+expression_3=avatar/annoyed
+expression_4=avatar/surprised
+```
+
+While the avatar is running, `E` / `expressions` opens the compact Quick Expressions menu. Choosing a slot changes the current runtime avatar folder without replacing the configured default `avatar_dir`.
+
+The future graphical frontend should call the same conceptual runtime folder-switch behavior.
 
 ### 4. Looping PNG frames
 
-This replaces the earlier separate blinking and "boil animation" ideas with one mechanism.
+Next planned core addition.
 
 Users draw the frames themselves and V_mini_me simply loops through sequential PNG files for the active direction/state.
 
@@ -87,7 +93,7 @@ up_talking_2.png
 up_talking_3.png
 ```
 
-The same mechanism can be used for hand-drawn boiling lineart, blinking, breathing, or other tiny loops. Missing extra frames should simply mean that state stays static.
+The same mechanism can cover hand-drawn boiling lineart, blinking, breathing, or other tiny loops. Missing extra frames should simply mean that state stays static.
 
 Likely controls:
 
@@ -98,32 +104,29 @@ loop_fps=6
 
 Keep frame discovery and playback deliberately simple. GIF support is not planned.
 
-### 5. Optional graphical launcher
+### 5. Optional graphical launcher/control panel
 
 This is the final planned addition.
 
 The preferred design is a separate optional launcher/configuration utility, likely using raylib + raygui. It must not be linked into the core avatar runtime.
-
-Proposed layout:
-
-```text
-V_mini_me/
-├── V_mini_me
-├── config.ini
-├── avatar/
-└── V_mini_me_launcher   # optional download
-```
 
 The launcher should:
 
 1. Locate V_mini_me in its own directory.
 2. Read the existing `config.ini` format.
 3. Present common settings graphically.
-4. Save those settings back to `config.ini`.
-5. Launch V_mini_me.
-6. Exit so the GUI library consumes no resources while the avatar is running.
+4. Expose Quick Expressions as convenient buttons/controls.
+5. Save persistent settings back to `config.ini`.
+6. Launch/control V_mini_me without adding GUI overhead to the core runtime.
 
 The launcher should remain independently downloadable. The normal V_mini_me package must continue to work without raylib, raygui, a GUI toolkit, or an installer.
+
+## Polish before core 1.0
+
+- Keep the small `V_mini_me` ASCII title in the terminal setup screen.
+- Test grouped changes on Linux and Windows.
+- Keep documentation and config examples synchronized with behavior.
+- Fix regressions rather than expanding scope unnecessarily.
 
 ## Features intentionally out of scope
 
@@ -142,16 +145,17 @@ Unless the project's goals change substantially, avoid adding:
 
 ## Release direction
 
-1. Keep the existing directional and microphone behavior stable.
+1. Direction and microphone behavior stable.
 2. Idle bob. Done.
 3. Idle sway. Done.
-4. Add folder-based expression switching.
-5. Add lightweight looping PNG frames if the folder-switching work remains stable.
-6. Test Linux and Windows after meaningful groups of changes.
-7. Improve documentation/config examples as features settle.
-8. Build the optional graphical launcher last.
+4. Quick Expressions / runtime folder switching. Current checkpoint.
+5. Test this checkpoint before stacking looping PNG playback on top.
+6. Add lightweight looping PNG frames.
+7. Documentation and regression polish.
+8. Core 0.9/1.0 candidate.
+9. Build the optional graphical launcher/control panel last.
 
-The launcher does not need to block a core 1.0 release.
+The optional GUI does not need to block a core 1.0 release.
 
 ## Decision rule for future features
 

@@ -2,6 +2,8 @@
 // Avatar session thread and runtime console commands
 // -------------------------------------------------------------------------
 
+constexpr LONG ACTION_EXPRESSION = 4;
+
 int idleMotionOffset(DWORD elapsed, bool enabled, int pixels, int periodMs) {
     if (!enabled || pixels <= 0 || periodMs <= 0) return 0;
 
@@ -10,15 +12,9 @@ int idleMotionOffset(DWORD elapsed, bool enabled, int pixels, int periodMs) {
     if (quarter == 0) return 0;
     const DWORD phase = elapsed % period;
 
-    if (phase < quarter) {
-        return (int)((phase * (DWORD)pixels) / quarter);
-    }
-    if (phase < quarter * 2) {
-        return pixels - (int)(((phase - quarter) * (DWORD)pixels) / quarter);
-    }
-    if (phase < quarter * 3) {
-        return -(int)(((phase - quarter * 2) * (DWORD)pixels) / quarter);
-    }
+    if (phase < quarter) return (int)((phase * (DWORD)pixels) / quarter);
+    if (phase < quarter * 2) return pixels - (int)(((phase - quarter) * (DWORD)pixels) / quarter);
+    if (phase < quarter * 3) return -(int)(((phase - quarter * 2) * (DWORD)pixels) / quarter);
     return -pixels + (int)(((phase - quarter * 3) * (DWORD)pixels) / quarter);
 }
 
@@ -136,16 +132,59 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
     return 0;
 }
 
+void printTitle() {
+    writeLine(L"");
+    writeLine(L" __      __                 _       _                 ");
+    writeLine(L" \\ \\    / /                (_)     (_)                ");
+    writeLine(L"  \\ \\  / / _ __ ___  _ __  _ _ __  _   _ __ ___   ___");
+    writeLine(L"   \\ \\/ / | '_ ` _ \\| '_ \\| | '_ \\| | | '_ ` _ \\ / _ \\");
+    writeLine(L"    \\  /  | | | | | | | | | | | | | | | | | | | | |  __/");
+    writeLine(L"     \\/   |_| |_| |_|_| |_|_|_| |_|_| |_| |_| |_| |_|\\___|");
+    writeLine(L"                       V_mini_me");
+}
+
 void printRuntimeHelp() {
     writeLine(L"");
     writeLine(L"V_mini_me is running.");
     writeLine(L"  Left-drag avatar : move it");
     writeLine(L"  Right-click avatar: return to setup");
+    writeLine(L"  E / expressions   : quick expression menu");
     writeLine(L"  S / setup         : return to setup");
     writeLine(L"  R / reload        : reload config/avatar");
     writeLine(L"  H / help          : show these commands");
     writeLine(L"  Q / quit          : exit");
     writeLine(L"");
+}
+
+bool chooseRuntimeExpression() {
+    writeLine(L"");
+    writeLine(L"QUICK EXPRESSIONS");
+    writeLine(L"");
+    bool any = false;
+    for (int i = 0; i < 8; ++i) {
+        if (!gExpressionDirs[i][0]) continue;
+        any = true;
+        writeText(L"  "); writeInt(i + 1); writeText(L". "); writeLine(gExpressionDirs[i]);
+    }
+    if (!any) {
+        writeLine(L"  No expression slots are configured.");
+        writeLine(L"  Return to setup and choose Quick expressions to add some.");
+        return false;
+    }
+    writeLine(L"  B. Back");
+    writeText(L"Expression: ");
+    wchar_t input[kLineCapacity];
+    if (!readLine(input, kLineCapacity)) return false;
+    if (wequalInsensitive(input, L"b") || wequalInsensitive(input, L"back") || !input[0]) return false;
+    int slot = parseIntW(input, 0);
+    if (slot < 1 || slot > 8 || !gExpressionDirs[slot - 1][0]) {
+        writeLine(L"That expression slot is not configured.");
+        return false;
+    }
+    wcopy(gRuntimeAvatarDir, kPathCapacity, gExpressionDirs[slot - 1]);
+    gRuntimeAvatarOverride = true;
+    writeText(L"Switched to: "); writeLine(gRuntimeAvatarDir);
+    return true;
 }
 
 LONG runSession(AppConfig& config) {
@@ -169,7 +208,9 @@ LONG runSession(AppConfig& config) {
                 InterlockedExchange(&gRequestedAction, ACTION_QUIT);
                 continue;
             }
-            if (wequalInsensitive(command, L"s") || wequalInsensitive(command, L"setup")) {
+            if (wequalInsensitive(command, L"e") || wequalInsensitive(command, L"expressions") || wequalInsensitive(command, L"expression")) {
+                if (chooseRuntimeExpression()) InterlockedExchange(&gRequestedAction, ACTION_EXPRESSION);
+            } else if (wequalInsensitive(command, L"s") || wequalInsensitive(command, L"setup")) {
                 InterlockedExchange(&gRequestedAction, ACTION_SETUP);
             } else if (wequalInsensitive(command, L"r") || wequalInsensitive(command, L"reload")) {
                 InterlockedExchange(&gRequestedAction, ACTION_RELOAD);
@@ -193,10 +234,50 @@ LONG runSession(AppConfig& config) {
 // Text-only setup menu
 // -------------------------------------------------------------------------
 
+void configureQuickExpressions() {
+    while (true) {
+        writeLine(L"");
+        writeLine(L"QUICK EXPRESSIONS");
+        writeLine(L"");
+        for (int i = 0; i < 8; ++i) {
+            writeText(L"  "); writeInt(i + 1); writeText(L". ");
+            writeLine(gExpressionDirs[i][0] ? gExpressionDirs[i] : L"[empty]");
+        }
+        writeLine(L"");
+        writeLine(L"Select a slot to assign/change, or B to go back.");
+        writeText(L"Select: ");
+        wchar_t input[kLineCapacity];
+        if (!readLine(input, kLineCapacity)) return;
+        if (wequalInsensitive(input, L"b") || wequalInsensitive(input, L"back") || !input[0]) return;
+        int slot = parseIntW(input, 0);
+        if (slot < 1 || slot > 8) {
+            writeLine(L"Choose a slot from 1 to 8.");
+            continue;
+        }
+        writeLine(L"Enter an avatar folder path. Leave blank to clear the slot.");
+        writeText(L"Path: ");
+        if (!readLine(input, kLineCapacity)) return;
+        if (!input[0]) {
+            gExpressionDirs[slot - 1][0] = 0;
+            continue;
+        }
+        wchar_t avatarBase[kPathCapacity];
+        joinPath(avatarBase, kPathCapacity, gExeDirectory, input);
+        wchar_t centerPath[kPathCapacity];
+        buildAvatarPath(centerPath, avatarBase, DIR_CENTER, false);
+        if (!fileExists(centerPath)) {
+            writeLine(L"That folder does not contain center.png. No change made.");
+            continue;
+        }
+        wcopy(gExpressionDirs[slot - 1], kPathCapacity, input);
+    }
+}
+
 void printSetup(const AppConfig& config) {
+    printTitle();
     writeLine(L"");
     writeLine(L"========================================");
-    writeLine(L"            V_MINI_ME SETUP");
+    writeLine(L"                 SETUP");
     writeLine(L"========================================");
     writeText(L"  1. Avatar folder      "); writeLine(config.avatarDir);
     writeText(L"  2. Scale              "); writeFixedMilli(config.scaleMilli); writeLine(L"");
@@ -205,7 +286,8 @@ void printSetup(const AppConfig& config) {
     writeText(L"  5. Talking bounce     "); writeLine(config.talkingBounce ? L"ON" : L"OFF");
     writeText(L"  6. Idle bob           "); writeLine(gIdleBob ? L"ON" : L"OFF");
     writeText(L"  7. Idle sway          "); writeLine(gIdleSway ? L"ON" : L"OFF");
-    writeText(L"  8. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
+    writeLine(L"  8. Quick expressions");
+    writeText(L"  9. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
     writeLine(L"");
     writeLine(L"  S. Save and start");
     writeLine(L"  Q. Save and quit");
@@ -255,6 +337,8 @@ bool runSetup(AppConfig& config) {
         } else if (option == 7) {
             gIdleSway = !gIdleSway;
         } else if (option == 8) {
+            configureQuickExpressions();
+        } else if (option == 9) {
             config.showSetupOnStart = !config.showSetupOnStart;
         }
     }
@@ -296,15 +380,20 @@ extern "C" void mainCRTStartup() {
     bool running = true;
     while (running) {
         if (showSetup) {
+            gRuntimeAvatarOverride = false;
             if (!runSetup(config)) break;
         }
         LONG result = runSession(config);
         if (result == ACTION_QUIT) {
             running = false;
+        } else if (result == ACTION_EXPRESSION) {
+            showSetup = false;
         } else if (result == ACTION_SETUP) {
+            gRuntimeAvatarOverride = false;
             loadConfig(config);
             showSetup = true;
         } else if (result == ACTION_RELOAD) {
+            gRuntimeAvatarOverride = false;
             loadConfig(config);
             showSetup = false;
         } else {

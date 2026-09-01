@@ -31,6 +31,18 @@ std::string yesNo(bool value) {
     return value ? "ON" : "OFF";
 }
 
+void printTitle() {
+    std::cout <<
+        "\n"
+        " __      __                 _       _                 \n"
+        " \\ \\    / /                (_)     (_)                \n"
+        "  \\ \\  / / _ __ ___  _ __  _ _ __  _   _ __ ___   ___\n"
+        "   \\ \\/ / | '_ ` _ \\| '_ \\| | '_ \\| | | '_ ` _ \\ / _ \\\n"
+        "    \\  /  | | | | | | | | | | | | | | | | | | | | |  __/\n"
+        "     \\/   |_| |_| |_|_| |_|_|_| |_|_| |_| |_| |_| |_|\\___|\n"
+        "                       V_mini_me\n";
+}
+
 std::filesystem::path resolveAvatarPath(
     const std::filesystem::path& executableDirectory,
     const std::string& configuredPath) {
@@ -73,46 +85,88 @@ std::vector<std::string> discoverAvatarDirectories(const std::filesystem::path& 
     return result;
 }
 
-void chooseAvatarDirectory(AppConfig& config, const std::filesystem::path& executableDirectory) {
+bool chooseAvatarPath(
+    const std::filesystem::path& executableDirectory,
+    std::string& target,
+    bool allowClear) {
+
     const auto avatars = discoverAvatarDirectories(executableDirectory);
 
     std::cout << "\nAvatar folders containing center.png:\n";
     for (std::size_t i = 0; i < avatars.size(); ++i) {
         std::cout << "  " << (i + 1) << ". " << avatars[i] << '\n';
     }
-    std::cout << "  C. Enter a custom path\n"
-              << "  B. Back\n"
-              << "> ";
+    std::cout << "  C. Enter a custom path\n";
+    if (allowClear) std::cout << "  X. Clear this slot\n";
+    std::cout << "  B. Back\n> ";
 
     std::string input;
-    if (!std::getline(std::cin, input)) return;
+    if (!std::getline(std::cin, input)) return false;
     input = trim(input);
-    if (input.empty() || lowerCopy(input) == "b") return;
+    const std::string lowered = lowerCopy(input);
+    if (input.empty() || lowered == "b") return false;
+    if (allowClear && lowered == "x") {
+        target.clear();
+        return true;
+    }
 
-    if (lowerCopy(input) == "c") {
+    if (lowered == "c") {
         std::cout << "Path (relative paths are relative to the executable):\n> ";
-        if (!std::getline(std::cin, input)) return;
+        if (!std::getline(std::cin, input)) return false;
         input = trim(input);
-        if (input.empty()) return;
-
+        if (input.empty()) return false;
         if (!validAvatarDirectory(executableDirectory, input)) {
             std::cout << "That folder does not contain a readable center.png. No change made.\n";
-            return;
+            return false;
         }
-        config.avatarDirectory = input;
-        return;
+        target = input;
+        return true;
     }
 
     try {
         const std::size_t choice = static_cast<std::size_t>(std::stoul(input));
         if (choice >= 1 && choice <= avatars.size()) {
-            config.avatarDirectory = avatars[choice - 1];
-            return;
+            target = avatars[choice - 1];
+            return true;
         }
     } catch (...) {
     }
 
     std::cout << "Unknown selection. No change made.\n";
+    return false;
+}
+
+void chooseAvatarDirectory(AppConfig& config, const std::filesystem::path& executableDirectory) {
+    chooseAvatarPath(executableDirectory, config.avatarDirectory, false);
+}
+
+void configureQuickExpressions(AppConfig& config, const std::filesystem::path& executableDirectory) {
+    while (true) {
+        std::cout << "\nQUICK EXPRESSIONS\n\n";
+        for (std::size_t i = 0; i < config.expressionDirectories.size(); ++i) {
+            std::cout << "  " << (i + 1) << ". ";
+            if (config.expressionDirectories[i].empty()) std::cout << "[empty]";
+            else std::cout << config.expressionDirectories[i];
+            std::cout << '\n';
+        }
+        std::cout << "\nSelect a slot to assign/change, or B to go back.\n> ";
+
+        std::string input;
+        if (!std::getline(std::cin, input)) return;
+        input = lowerCopy(trim(input));
+        if (input.empty() || input == "b" || input == "back") return;
+
+        try {
+            const std::size_t slot = static_cast<std::size_t>(std::stoul(input));
+            if (slot >= 1 && slot <= config.expressionDirectories.size()) {
+                chooseAvatarPath(executableDirectory, config.expressionDirectories[slot - 1], true);
+            } else {
+                std::cout << "Choose a slot from 1 to 8.\n";
+            }
+        } catch (...) {
+            std::cout << "Unknown selection.\n";
+        }
+    }
 }
 
 void chooseScale(AppConfig& config) {
@@ -156,8 +210,9 @@ void chooseDirectionMode(AppConfig& config) {
 }
 
 void printSetupScreen(const AppConfig& config, const std::filesystem::path& configPath) {
+    printTitle();
     std::cout << "\n========================================\n"
-              << "            V_MINI_ME SETUP\n"
+              << "                 SETUP\n"
               << "========================================\n"
               << "  1. Avatar folder      " << config.avatarDirectory << '\n'
               << "  2. Scale              " << std::fixed << std::setprecision(2) << config.scale << '\n'
@@ -166,7 +221,8 @@ void printSetupScreen(const AppConfig& config, const std::filesystem::path& conf
               << "  5. Talking bounce     " << yesNo(config.talkingBounce) << '\n'
               << "  6. Idle bob           " << yesNo(config.idleBob) << '\n'
               << "  7. Idle sway          " << yesNo(config.idleSway) << '\n'
-              << "  8. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
+              << "  8. Quick expressions\n"
+              << "  9. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
               << "\n"
               << "  S. Save and start\n"
               << "  Q. Save and quit\n"
@@ -206,6 +262,8 @@ SetupMenuResult runSetupMenu(
         } else if (input == "7") {
             config.idleSway = !config.idleSway;
         } else if (input == "8") {
+            configureQuickExpressions(config, executableDirectory);
+        } else if (input == "9") {
             config.showSetupOnStart = !config.showSetupOnStart;
         } else if (input == "s" || input == "start") {
             saveConfig(config, configPath.string());
@@ -219,15 +277,52 @@ SetupMenuResult runSetupMenu(
     }
 }
 
+bool chooseQuickExpression(const AppConfig& config, std::string& selectedDirectory) {
+    bool any = false;
+    std::cout << "\nQUICK EXPRESSIONS\n\n";
+    for (std::size_t i = 0; i < config.expressionDirectories.size(); ++i) {
+        if (config.expressionDirectories[i].empty()) continue;
+        any = true;
+        std::cout << "  " << (i + 1) << ". " << config.expressionDirectories[i] << '\n';
+    }
+
+    if (!any) {
+        std::cout << "  No expression slots are configured.\n"
+                  << "  Return to setup and choose Quick expressions to add some.\n\n";
+        return false;
+    }
+
+    std::cout << "  B. Back\n\nExpression: ";
+    std::string input;
+    if (!std::getline(std::cin, input)) return false;
+    input = lowerCopy(trim(input));
+    if (input.empty() || input == "b" || input == "back") return false;
+
+    try {
+        const std::size_t slot = static_cast<std::size_t>(std::stoul(input));
+        if (slot >= 1 && slot <= config.expressionDirectories.size() &&
+            !config.expressionDirectories[slot - 1].empty()) {
+            selectedDirectory = config.expressionDirectories[slot - 1];
+            std::cout << "Switched to: " << selectedDirectory << "\n> " << std::flush;
+            return true;
+        }
+    } catch (...) {
+    }
+
+    std::cout << "That expression slot is not configured.\n> " << std::flush;
+    return false;
+}
+
 void printRuntimeHelp() {
     std::cout << "\nV_mini_me is running.\n"
               << "  Left-drag avatar : move it\n"
               << "  Right-click      : return to setup\n"
               << "\nTerminal commands:\n"
-              << "  S / setup   return to setup menu\n"
-              << "  R / reload  reload config.ini and avatar files\n"
-              << "  H / help    show this list\n"
-              << "  Q / quit    exit\n"
+              << "  E / expressions  quick expression menu\n"
+              << "  S / setup        return to setup menu\n"
+              << "  R / reload       reload config.ini and avatar files\n"
+              << "  H / help         show this list\n"
+              << "  Q / quit         exit\n"
               << "> " << std::flush;
 }
 
@@ -268,6 +363,9 @@ RuntimeCommand waitForRuntimeCommand(int timeoutMilliseconds) {
     }
 
     input = lowerCopy(trim(input));
+    if (input == "e" || input == "expressions" || input == "expression") {
+        return RuntimeCommand::Expressions;
+    }
     if (input == "s" || input == "setup" || input == "menu") {
         return RuntimeCommand::Setup;
     }

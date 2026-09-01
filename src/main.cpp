@@ -18,7 +18,8 @@ namespace {
 enum class SessionResult {
     Quit,
     Setup,
-    Reload
+    Reload,
+    Expression
 };
 
 struct CommandLineOptions {
@@ -37,9 +38,9 @@ std::filesystem::path executableDirectory(const char* argv0) {
 
 std::filesystem::path resolvedAvatarDirectory(
     const std::filesystem::path& base,
-    const AppConfig& config) {
+    const std::string& configuredPath) {
 
-    std::filesystem::path avatarPath(config.avatarDirectory);
+    std::filesystem::path avatarPath(configuredPath);
     return avatarPath.is_relative() ? base / avatarPath : avatarPath;
 }
 
@@ -88,9 +89,10 @@ int sinusoidalOffset(
 
 SessionResult runAvatarSession(
     const AppConfig& config,
-    const std::filesystem::path& base) {
+    const std::filesystem::path& base,
+    std::string& activeAvatarDirectory) {
 
-    AvatarSet avatar(resolvedAvatarDirectory(base, config).string());
+    AvatarSet avatar(resolvedAvatarDirectory(base, activeAvatarDirectory).string());
 
     const int talkingMargin = config.talkingBounce ? config.bouncePixels : 0;
     const int bobMargin = config.idleBob ? config.idleBobPixels : 0;
@@ -224,6 +226,11 @@ SessionResult runAvatarSession(
         }
 
         switch (waitForRuntimeCommand(5)) {
+            case RuntimeCommand::Expressions:
+                if (chooseQuickExpression(config, activeAvatarDirectory)) {
+                    return SessionResult::Expression;
+                }
+                break;
             case RuntimeCommand::Setup:
                 return SessionResult::Setup;
             case RuntimeCommand::Reload:
@@ -245,6 +252,7 @@ int main(int argc, char** argv) {
         const CommandLineOptions options = parseCommandLine(argc, argv, base);
 
         AppConfig config = loadConfig(options.configPath.string());
+        std::string activeAvatarDirectory = config.avatarDirectory;
         bool showSetup = options.forceSetup || config.showSetupOnStart;
 
         while (true) {
@@ -252,14 +260,21 @@ int main(int argc, char** argv) {
                 if (runSetupMenu(config, base, options.configPath) == SetupMenuResult::Quit) {
                     return 0;
                 }
+                activeAvatarDirectory = config.avatarDirectory;
             }
 
-            const SessionResult result = runAvatarSession(config, base);
+            const SessionResult result = runAvatarSession(config, base, activeAvatarDirectory);
             if (result == SessionResult::Quit) {
                 return 0;
             }
 
+            if (result == SessionResult::Expression) {
+                showSetup = false;
+                continue;
+            }
+
             config = loadConfig(options.configPath.string());
+            activeAvatarDirectory = config.avatarDirectory;
             showSetup = (result == SessionResult::Setup);
         }
     } catch (const std::exception& error) {

@@ -3,6 +3,7 @@
 #include "AppConfig.hpp"
 
 #include <filesystem>
+#include <string>
 
 // Result returned by the interactive setup screen shown in the terminal.
 enum class SetupMenuResult {
@@ -15,6 +16,7 @@ enum class RuntimeCommand {
     NoCommand,
     Setup,
     Reload,
+    Expressions,
     Quit
 };
 
@@ -25,10 +27,12 @@ SetupMenuResult runSetupMenu(
     const std::filesystem::path& executableDirectory,
     const std::filesystem::path& configPath);
 
+// Opens the nested Quick Expressions menu. Returns true and writes the selected
+// folder when a configured slot is chosen; false means back/no selection.
+bool chooseQuickExpression(const AppConfig& config, std::string& selectedDirectory);
+
 // Prints the compact command list that remains available while the avatar runs.
 void printRuntimeHelp();
 
 // Waits up to timeoutMilliseconds for one complete terminal command.
-// On Linux this uses poll(2), replacing the application's old sleep call rather
-// than adding another busy loop or console thread.
 RuntimeCommand waitForRuntimeCommand(int timeoutMilliseconds);

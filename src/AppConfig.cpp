@@ -22,6 +22,14 @@ bool parseBool(const std::string& value) {
     });
     return lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on";
 }
+
+int expressionIndexForKey(const std::string& key) {
+    constexpr const char* prefix = "expression_";
+    if (key.rfind(prefix, 0) != 0) return -1;
+    const std::string suffix = key.substr(11);
+    if (suffix.size() != 1 || suffix[0] < '1' || suffix[0] > '8') return -1;
+    return suffix[0] - '1';
+}
 }
 
 AppConfig loadConfig(const std::string& path) {
@@ -71,6 +79,12 @@ AppConfig loadConfig(const std::string& path) {
             else if (key == "idle_sway") config.idleSway = parseBool(value);
             else if (key == "idle_sway_pixels") config.idleSwayPixels = std::clamp(std::stoi(value), 0, 200);
             else if (key == "idle_sway_period_ms") config.idleSwayPeriodMilliseconds = std::clamp(std::stoi(value), 200, 30000);
+            else {
+                const int expressionIndex = expressionIndexForKey(key);
+                if (expressionIndex >= 0) {
+                    config.expressionDirectories[static_cast<std::size_t>(expressionIndex)] = value;
+                }
+            }
         } catch (const std::exception&) {
             throw std::runtime_error("Invalid value for config key '" + key + "': " + value);
         }
@@ -120,5 +134,11 @@ void saveConfig(const AppConfig& config, const std::string& path) {
          << "idle_bob_period_ms=" << config.idleBobPeriodMilliseconds << "\n"
          << "idle_sway=" << (config.idleSway ? "true" : "false") << "\n"
          << "idle_sway_pixels=" << config.idleSwayPixels << "\n"
-         << "idle_sway_period_ms=" << config.idleSwayPeriodMilliseconds << "\n";
+         << "idle_sway_period_ms=" << config.idleSwayPeriodMilliseconds << "\n\n"
+         << "# --- Quick expressions ---\n"
+         << "# Empty slots are hidden from the runtime E / expressions menu.\n";
+
+    for (std::size_t i = 0; i < config.expressionDirectories.size(); ++i) {
+        file << "expression_" << (i + 1) << '=' << config.expressionDirectories[i] << '\n';
+    }
 }
