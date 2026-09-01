@@ -1,0 +1,40 @@
+name: Build optional Linux launcher
+
+on:
+  push:
+    paths:
+      - 'launcher/linux/V_mini_me_launcher.cpp'
+      - 'launcher/linux/build_linux.sh'
+      - '.github/workflows/build-linux-launcher.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install linker dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libgl1-mesa-dev libx11-dev
+      - name: Download raylib 6.0
+        run: |
+          curl -L --fail --retry 3 https://github.com/raysan5/raylib/releases/download/6.0/raylib-6.0_linux_amd64.tar.gz -o /tmp/raylib.tar.gz
+          tar -xzf /tmp/raylib.tar.gz -C /tmp
+      - name: Build launcher
+        run: |
+          mkdir -p launcher/bin/linux-x86_64
+          launcher/linux/build_linux.sh /tmp/raylib-6.0_linux_amd64 launcher/bin/linux-x86_64/V_mini_me_launcher
+          file launcher/bin/linux-x86_64/V_mini_me_launcher
+          ls -lh launcher/bin/linux-x86_64/V_mini_me_launcher
+      - name: Commit compiled launcher
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f launcher/bin/linux-x86_64/V_mini_me_launcher
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Build optional Linux launcher [skip ci]'
+          git push
