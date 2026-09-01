@@ -2,7 +2,7 @@
 
 This file is the working reference for the intended scope and development direction of V_mini_me.
 
-The main design goal is to remain a deliberately small, native reactive PNG avatar with very low CPU, RAM, GPU, and dependency overhead. New features should be judged primarily by whether they add visible usefulness without pushing the project toward a full VTuber suite.
+The main design goal is to remain a deliberately small, native reactive PNG avatar with very low CPU, RAM, GPU, and dependency overhead. New features should add visible usefulness without turning the project into a general-purpose animation or tracking suite.
 
 ## Current baseline
 
@@ -23,70 +23,41 @@ V_mini_me currently provides:
 
 This baseline should remain the core of the project.
 
-## Near-term priorities
+## Planned additions, easiest to hardest
 
-### 1. Idle motion
+### 1. Idle bob
 
-Add very small configurable motion so static avatars feel less rigid.
+Status: implemented.
 
-Planned options:
+A gentle configurable vertical movement around the avatar's normal resting position.
 
-- Idle vertical bob.
-- Idle horizontal sway.
-- Independent enable/disable switches.
-- Configurable pixel amplitude.
-- Configurable motion period/speed.
-- Optional talking-motion multiplier if it remains simple.
-
-Implementation should use simple positional offsets rather than a physics or animation system.
-
-Example configuration direction:
+Settings:
 
 ```ini
-idle_bob=true
-bob_pixels=3
-bob_period_ms=2200
-
-idle_sway=false
-sway_pixels=2
-sway_period_ms=3000
-
-talk_motion_multiplier=1.25
+idle_bob=false
+idle_bob_pixels=3
+idle_bob_period_ms=2400
 ```
 
-Resource target: effectively negligible additional CPU and memory use.
+The implementation is positional only, with no physics or animation subsystem. It is off by default so existing configurations keep their previous appearance.
 
-### 2. Benchmark and document resource use
+### 2. Idle sway
 
-Before significantly expanding the feature set, measure the project against comparable lightweight avatar software.
+Add the same lightweight concept horizontally.
 
-Primary comparison target:
+Likely settings:
 
-- Veadotube Mini.
+```ini
+idle_sway=false
+idle_sway_pixels=2
+idle_sway_period_ms=3000
+```
 
-Secondary comparisons where practical:
+Bob and sway should remain independent so either can be disabled completely.
 
-- PNGTuber Plus.
-- Other small PNGTuber/reactive-avatar tools.
+### 3. Blinking
 
-Record at least:
-
-- Idle CPU usage.
-- Talking CPU usage.
-- RAM usage.
-- GPU usage where measurable.
-- Executable/download size.
-- Test avatar resolution and number of loaded images.
-
-Benchmarks should be performed on the same hardware and under comparable conditions. Avoid making exact performance claims without measurements.
-
-## Optional lightweight additions
-
-These are candidates, not commitments.
-
-### Blinking
-
-Optional directional blink images such as:
+Allow optional directional blink images such as:
 
 ```text
 center_blink.png
@@ -95,13 +66,17 @@ right_blink.png
 ...
 ```
 
-Use a simple randomized timer. Missing blink images should fall back cleanly to the normal image.
+Use a simple randomized timer. Missing blink images should fall back to the normal image.
 
-This is considered a good fit if implementation remains small.
+### 4. Expression hotkeys
 
-### Multi-PNG boil animation
+Allow a small number of hotkeys to switch avatar sets or expressions.
 
-Possible later support for a small number of alternate PNG frames per state, primarily for hand-drawn or "boiling lineart" animation.
+Keep this deliberately small. Do not build a scripting system or general state machine around it.
+
+### 5. Multi-PNG boil animation
+
+Allow a small number of alternate PNG frames per state for hand-drawn or boiling-lineart animation.
 
 Example:
 
@@ -111,7 +86,7 @@ center_2.png
 center_3.png
 ```
 
-Potential controls:
+Possible controls:
 
 ```ini
 animation_enabled=true
@@ -119,31 +94,13 @@ animation_fps=6
 animation_random=true
 ```
 
-Prefer a small fixed frame set over adding a general animation engine.
+Prefer a small fixed PNG frame set over adding a general animation engine. GIF support is not currently planned.
 
-True GIF support is currently not a priority. Multi-PNG cycling provides most of the intended visual effect with simpler code and predictable resource use.
+### 6. Optional graphical launcher
 
-### Expression hotkeys
+This should be the last planned addition.
 
-Potentially allow a small number of hotkeys to switch avatar sets or expressions.
-
-Keep this simple. Avoid building a general state-machine or scripting system unless there is clear user demand.
-
-### Update-rate control
-
-Consider an explicit update/render-rate option so users can trade responsiveness for even lower resource consumption.
-
-Example:
-
-```ini
-update_hz=30
-```
-
-## Optional graphical launcher
-
-A GUI should not be integrated into the core avatar runtime unless there is a strong reason to do so.
-
-The preferred approach is an **optional separate launcher/configuration utility**, likely using raylib + raygui.
+The preferred design is a separate optional launcher/configuration utility, likely using raylib + raygui. It should not be linked into the core avatar runtime.
 
 Proposed layout:
 
@@ -164,53 +121,36 @@ The launcher should:
 5. Launch V_mini_me.
 6. Exit so the GUI library consumes no resources while the avatar is running.
 
-Suggested GUI controls:
-
-- Avatar folder selection.
-- Scale.
-- Direction mode.
-- Microphone enable/disable.
-- Microphone sensitivity.
-- Microphone release time.
-- Talking bounce enable/amount.
-- Idle bob settings.
-- Idle sway settings.
-- Save and Start.
-
-The launcher should remain optional and independently downloadable. The normal V_mini_me package should continue to work without raylib, raygui, a GUI toolkit, or an installer.
+The launcher should remain independently downloadable. The normal V_mini_me package must continue to work without raylib, raygui, a GUI toolkit, or an installer.
 
 ## Features intentionally out of scope
 
 Unless the project's goals change substantially, avoid adding:
 
-- Webcam face tracking.
-- Computer-vision tracking.
-- Live2D support.
-- Skeletal animation.
+- Webcam or computer-vision tracking.
+- Skeletal/deformation model systems.
 - General physics systems.
 - Full animation timelines.
 - Speech recognition.
 - Embedded scripting languages.
 - Plugin frameworks.
-- Electron/web-based UI.
+- Web-based UI runtimes.
 - Heavy GUI frameworks in the core runtime.
 - A game engine dependency for the avatar runtime.
-
-These features are better served by existing full VTuber applications and would weaken V_mini_me's main advantage.
 
 ## Release direction
 
 A sensible path toward a stable 1.0 is:
 
 1. Keep the existing directional and microphone behavior stable.
-2. Add configurable idle bob/sway.
-3. Test for regressions on Linux and Windows.
-4. Benchmark actual CPU/RAM/GPU use.
-5. Improve documentation based on those measurements.
-6. Consider optional blinking if it remains trivial and reliable.
+2. Idle bob. Done.
+3. Add idle sway.
+4. Consider blinking.
+5. Test Linux and Windows after each addition.
+6. Improve documentation and configuration examples as features settle.
 7. Declare 1.0 once the core behavior, configuration, and cross-platform builds are dependable.
 
-The optional GUI launcher and multi-PNG animation do not need to block 1.0.
+Expression hotkeys, multi-PNG animation, and the optional GUI launcher do not need to block 1.0.
 
 ## Decision rule for future features
 
@@ -220,6 +160,5 @@ Before adding a feature, ask:
 2. Can it be implemented without a large dependency or subsystem?
 3. Does it preserve very low runtime resource use?
 4. Can users who do not want it leave it completely disabled?
-5. Is it simpler than asking users to run a substantially heavier VTuber application instead?
 
 If the answer to most of these is no, it probably does not belong in V_mini_me.

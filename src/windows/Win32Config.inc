@@ -2,6 +2,10 @@
 // Paths and config.ini
 // -------------------------------------------------------------------------
 
+bool gIdleBob = false;
+int gIdleBobPixels = 3;
+int gIdleBobPeriodMs = 2400;
+
 void setDefaults(AppConfig& config) {
     memset(&config, 0, sizeof(config));
     wcopy(config.avatarDir, kPathCapacity, L"avatar/default");
@@ -21,6 +25,9 @@ void setDefaults(AppConfig& config) {
     config.talkingBounce = true;
     config.bouncePixels = 4;
     config.bounceIntervalMs = 150;
+    gIdleBob = false;
+    gIdleBobPixels = 3;
+    gIdleBobPeriodMs = 2400;
 }
 
 bool isAbsolutePath(const wchar_t* path) {
@@ -39,8 +46,6 @@ void joinPath(wchar_t* output, int capacity, const wchar_t* base, const wchar_t*
     int length = wlen(output);
     if (length > 0 && output[length - 1] != L'\\' && output[length - 1] != L'/') wappend(output, capacity, L"\\");
     wappend(output, capacity, child);
-    // Win32 accepts many forward-slash paths, but normalize them so older APIs
-    // and tools see conventional Windows paths consistently.
     for (int i = 0; output[i]; ++i) if (output[i] == L'/') output[i] = L'\\';
 }
 
@@ -138,6 +143,12 @@ void applyConfigValue(AppConfig& config, const char* key, int keyLength, const c
         config.bouncePixels = parseIntA(value, valueLength, config.bouncePixels);
     } else if (akeyEqual(key, keyLength, "bounce_interval_ms")) {
         config.bounceIntervalMs = parseIntA(value, valueLength, config.bounceIntervalMs);
+    } else if (akeyEqual(key, keyLength, "idle_bob")) {
+        gIdleBob = parseBoolA(value, valueLength, gIdleBob);
+    } else if (akeyEqual(key, keyLength, "idle_bob_pixels")) {
+        gIdleBobPixels = parseIntA(value, valueLength, gIdleBobPixels);
+    } else if (akeyEqual(key, keyLength, "idle_bob_period_ms")) {
+        gIdleBobPeriodMs = parseIntA(value, valueLength, gIdleBobPeriodMs);
     }
 }
 
@@ -154,6 +165,10 @@ void clampConfig(AppConfig& config) {
     if (config.bouncePixels < 0) config.bouncePixels = 0;
     if (config.bouncePixels > 1000) config.bouncePixels = 1000;
     if (config.bounceIntervalMs < 20) config.bounceIntervalMs = 20;
+    if (gIdleBobPixels < 0) gIdleBobPixels = 0;
+    if (gIdleBobPixels > 200) gIdleBobPixels = 200;
+    if (gIdleBobPeriodMs < 200) gIdleBobPeriodMs = 200;
+    if (gIdleBobPeriodMs > 30000) gIdleBobPeriodMs = 30000;
 }
 
 bool loadConfig(AppConfig& config) {
@@ -259,6 +274,9 @@ bool saveConfig(const AppConfig& config) {
     appendA(output, outputCapacity, at, "\r\ntalk_bounce="); appendA(output, outputCapacity, at, config.talkingBounce ? "true" : "false");
     appendA(output, outputCapacity, at, "\r\nbounce_pixels="); appendIntA(output, outputCapacity, at, config.bouncePixels);
     appendA(output, outputCapacity, at, "\r\nbounce_interval_ms="); appendIntA(output, outputCapacity, at, config.bounceIntervalMs);
+    appendA(output, outputCapacity, at, "\r\n\r\n# Idle motion\r\nidle_bob="); appendA(output, outputCapacity, at, gIdleBob ? "true" : "false");
+    appendA(output, outputCapacity, at, "\r\nidle_bob_pixels="); appendIntA(output, outputCapacity, at, gIdleBobPixels);
+    appendA(output, outputCapacity, at, "\r\nidle_bob_period_ms="); appendIntA(output, outputCapacity, at, gIdleBobPeriodMs);
     appendA(output, outputCapacity, at, "\r\n");
 
     HANDLE file = CreateFileW(gConfigPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

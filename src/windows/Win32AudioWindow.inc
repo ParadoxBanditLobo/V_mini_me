@@ -57,7 +57,6 @@ bool microphoneLoud(MicrophoneMonitor& monitor) {
                 long long sample = monitor.samples[index][i];
                 sumSquares += (unsigned long long)(sample * sample);
             }
-            // Compare RMS^2 to threshold^2 without calling sqrt().
             unsigned long long threshold = (unsigned long long)monitor.thresholdMicro * 32768ULL;
             threshold /= kThresholdBase;
             unsigned long long thresholdSquared = threshold * threshold;
@@ -169,7 +168,9 @@ bool createAvatarWindow(WindowContext& context, AvatarSet& avatar, AppConfig& co
     if (!ensureWindowClass()) return false;
     context.avatar = &avatar;
     context.config = &config;
-    context.bounceMargin = config.talkingBounce ? config.bouncePixels : 0;
+    const int talkingMargin = config.talkingBounce ? config.bouncePixels : 0;
+    const int idleMargin = gIdleBob ? gIdleBobPixels : 0;
+    context.bounceMargin = talkingMargin + idleMargin;
     context.width = avatar.maxWidth > 0 ? avatar.maxWidth : 1;
     context.height = avatar.maxHeight + context.bounceMargin * 2;
     if (context.height < 1) context.height = 1;
@@ -188,7 +189,7 @@ bool createAvatarWindow(WindowContext& context, AvatarSet& avatar, AppConfig& co
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     info.bmiHeader.biWidth = context.width;
-    info.bmiHeader.biHeight = -context.height; // top-down BGRA canvas
+    info.bmiHeader.biHeight = -context.height;
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 32;
     info.bmiHeader.biCompression = BI_RGB;

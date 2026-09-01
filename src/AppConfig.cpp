@@ -66,6 +66,9 @@ AppConfig loadConfig(const std::string& path) {
             else if (key == "talk_bounce") config.talkingBounce = parseBool(value);
             else if (key == "bounce_pixels") config.bouncePixels = std::clamp(std::stoi(value), 0, 200);
             else if (key == "bounce_interval_ms") config.bounceIntervalMilliseconds = std::clamp(std::stoi(value), 50, 5000);
+            else if (key == "idle_bob") config.idleBob = parseBool(value);
+            else if (key == "idle_bob_pixels") config.idleBobPixels = std::clamp(std::stoi(value), 0, 200);
+            else if (key == "idle_bob_period_ms") config.idleBobPeriodMilliseconds = std::clamp(std::stoi(value), 200, 30000);
         } catch (const std::exception&) {
             throw std::runtime_error("Invalid value for config key '" + key + "': " + value);
         }
@@ -108,5 +111,9 @@ void saveConfig(const AppConfig& config, const std::string& path) {
          << "mic_release_ms=" << config.microphoneReleaseMilliseconds << "\n\n"
          << "talk_bounce=" << (config.talkingBounce ? "true" : "false") << "\n"
          << "bounce_pixels=" << config.bouncePixels << "\n"
-         << "bounce_interval_ms=" << config.bounceIntervalMilliseconds << "\n";
+         << "bounce_interval_ms=" << config.bounceIntervalMilliseconds << "\n\n"
+         << "# --- Idle motion ---\n"
+         << "idle_bob=" << (config.idleBob ? "true" : "false") << "\n"
+         << "idle_bob_pixels=" << config.idleBobPixels << "\n"
+         << "idle_bob_period_ms=" << config.idleBobPeriodMilliseconds << "\n";
 }

@@ -2,6 +2,26 @@
 // Avatar session thread and runtime console commands
 // -------------------------------------------------------------------------
 
+int idleBobOffset(DWORD elapsed) {
+    if (!gIdleBob || gIdleBobPixels <= 0 || gIdleBobPeriodMs <= 0) return 0;
+
+    const DWORD period = (DWORD)gIdleBobPeriodMs;
+    const DWORD quarter = period / 4;
+    if (quarter == 0) return 0;
+    const DWORD phase = elapsed % period;
+
+    if (phase < quarter) {
+        return (int)((phase * (DWORD)gIdleBobPixels) / quarter);
+    }
+    if (phase < quarter * 2) {
+        return gIdleBobPixels - (int)(((phase - quarter) * (DWORD)gIdleBobPixels) / quarter);
+    }
+    if (phase < quarter * 3) {
+        return -(int)(((phase - quarter * 2) * (DWORD)gIdleBobPixels) / quarter);
+    }
+    return -gIdleBobPixels + (int)(((phase - quarter * 3) * (DWORD)gIdleBobPixels) / quarter);
+}
+
 DWORD WINAPI avatarThread(LPVOID parameter) {
     AppConfig* config = (AppConfig*)parameter;
     AvatarSet avatar{};
@@ -25,18 +45,19 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
     }
 
     DWORD now = GetTickCount();
+    const DWORD sessionStarted = now;
     DWORD nextDirectionUpdate = now;
     DWORD lastVoiceActivity = now;
     DWORD talkingStarted = now;
     int currentDirection = DIR_CENTER;
     bool currentTalking = false;
-    int currentBounce = 0;
+    int currentVerticalOffset = 0;
 
     while (true) {
         MSG message{};
         bool quitMessage = false;
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-            if (message.message == 0x0012) { quitMessage = true; break; } // WM_QUIT
+            if (message.message == 0x0012) { quitMessage = true; break; }
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -50,7 +71,6 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
         now = GetTickCount();
         int nextDirection = currentDirection;
         bool nextTalking = currentTalking;
-        int nextBounce = currentBounce;
 
         if ((long)(now - nextDirectionUpdate) >= 0) {
             POINT mouse{};
@@ -76,20 +96,21 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
             nextTalking = false;
         }
 
+        int talkingOffset = 0;
         if (nextTalking && config->talkingBounce && config->bouncePixels > 0) {
             DWORD phase = (now - talkingStarted) / (DWORD)config->bounceIntervalMs;
-            nextBounce = (phase % 2 == 0) ? config->bouncePixels : 0;
-        } else {
-            nextBounce = 0;
+            talkingOffset = (phase % 2 == 0) ? config->bouncePixels : 0;
         }
 
-        if (nextDirection != currentDirection || nextTalking != currentTalking || nextBounce != currentBounce) {
+        const int nextVerticalOffset = talkingOffset + idleBobOffset(now - sessionStarted);
+
+        if (nextDirection != currentDirection || nextTalking != currentTalking || nextVerticalOffset != currentVerticalOffset) {
             currentDirection = nextDirection;
             currentTalking = nextTalking;
-            currentBounce = nextBounce;
+            currentVerticalOffset = nextVerticalOffset;
             window.direction = currentDirection;
             window.talking = currentTalking;
-            window.bounce = currentBounce;
+            window.bounce = currentVerticalOffset;
             renderWindow(window);
         }
         Sleep(5);
@@ -152,7 +173,7 @@ LONG runSession(AppConfig& config) {
     WaitForSingleObject(thread, INFINITE_WAIT);
     CloseHandle(thread);
     LONG result = InterlockedCompareExchange(&gSessionResult, ACTION_NONE, ACTION_NONE);
-    saveConfig(config); // Also remembers a dragged window position.
+    saveConfig(config);
     return result == ACTION_NONE ? ACTION_QUIT : result;
 }
 
@@ -170,7 +191,8 @@ void printSetup(const AppConfig& config) {
     writeText(L"  3. Direction mode     "); writeLine(modeNameW(config.directionMode));
     writeText(L"  4. Microphone         "); writeLine(config.microphoneEnabled ? L"ON" : L"OFF");
     writeText(L"  5. Talking bounce     "); writeLine(config.talkingBounce ? L"ON" : L"OFF");
-    writeText(L"  6. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
+    writeText(L"  6. Idle bob           "); writeLine(gIdleBob ? L"ON" : L"OFF");
+    writeText(L"  7. Setup on startup   "); writeLine(config.showSetupOnStart ? L"ON" : L"OFF");
     writeLine(L"");
     writeLine(L"  S. Save and start");
     writeLine(L"  Q. Save and quit");
@@ -216,6 +238,8 @@ bool runSetup(AppConfig& config) {
         } else if (option == 5) {
             config.talkingBounce = !config.talkingBounce;
         } else if (option == 6) {
+            gIdleBob = !gIdleBob;
+        } else if (option == 7) {
             config.showSetupOnStart = !config.showSetupOnStart;
         }
     }

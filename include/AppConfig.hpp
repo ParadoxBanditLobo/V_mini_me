@@ -33,6 +33,13 @@ struct AppConfig {
     bool talkingBounce = true;
     int bouncePixels = 4;
     int bounceIntervalMilliseconds = 150;
+
+    // Idle bob is another positional-only effect. It moves the avatar gently
+    // up and down around its normal position and is off by default so existing
+    // configurations preserve their previous appearance.
+    bool idleBob = false;
+    int idleBobPixels = 3;
+    int idleBobPeriodMilliseconds = 2400;
 };
 
 // Reads a deliberately small key=value INI-style file. Unknown keys are

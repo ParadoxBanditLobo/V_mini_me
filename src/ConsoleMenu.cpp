@@ -49,9 +49,6 @@ bool validAvatarDirectory(
            std::filesystem::is_regular_file(path / "center.png", error);
 }
 
-// Returns avatar folders directly below the release folder's avatar/ directory.
-// Only folders containing center.png are listed, so every displayed choice can
-// be loaded by AvatarSet without another validation step.
 std::vector<std::string> discoverAvatarDirectories(const std::filesystem::path& executableDirectory) {
     std::vector<std::string> result;
     const auto root = executableDirectory / "avatar";
@@ -113,7 +110,6 @@ void chooseAvatarDirectory(AppConfig& config, const std::filesystem::path& execu
             return;
         }
     } catch (...) {
-        // Fall through to the short error below.
     }
 
     std::cout << "Unknown selection. No change made.\n";
@@ -168,7 +164,8 @@ void printSetupScreen(const AppConfig& config, const std::filesystem::path& conf
               << "  3. Direction mode     " << directionModeToName(config.directionMode) << '\n'
               << "  4. Microphone         " << yesNo(config.microphoneEnabled) << '\n'
               << "  5. Talking bounce     " << yesNo(config.talkingBounce) << '\n'
-              << "  6. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
+              << "  6. Idle bob           " << yesNo(config.idleBob) << '\n'
+              << "  7. Setup on startup   " << yesNo(config.showSetupOnStart) << '\n'
               << "\n"
               << "  S. Save and start\n"
               << "  Q. Save and quit\n"
@@ -189,8 +186,6 @@ SetupMenuResult runSetupMenu(
 
         std::string input;
         if (!std::getline(std::cin, input)) {
-            // If no terminal is attached, use the current settings instead of
-            // preventing the graphical avatar from starting.
             return SetupMenuResult::Start;
         }
 
@@ -206,6 +201,8 @@ SetupMenuResult runSetupMenu(
         } else if (input == "5") {
             config.talkingBounce = !config.talkingBounce;
         } else if (input == "6") {
+            config.idleBob = !config.idleBob;
+        } else if (input == "7") {
             config.showSetupOnStart = !config.showSetupOnStart;
         } else if (input == "s" || input == "start") {
             saveConfig(config, configPath.string());
@@ -232,10 +229,6 @@ void printRuntimeHelp() {
 }
 
 RuntimeCommand waitForRuntimeCommand(int timeoutMilliseconds) {
-    // poll(2) lets the main thread sleep while also watching stdin. This keeps
-    // the console responsive without creating a second console thread or a busy
-    // input loop. The Windows port can replace only this function with the
-    // equivalent Win32 console-input check; the menu logic above is portable.
     static bool stdinAvailable = true;
 
     if (!stdinAvailable) {

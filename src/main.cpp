@@ -26,8 +26,6 @@ struct CommandLineOptions {
     bool forceSetup = false;
 };
 
-// Resolves paths relative to the executable, not the shell's current directory.
-// This makes the release folder portable: users can run the binary from anywhere.
 std::filesystem::path executableDirectory(const char* argv0) {
     std::error_code error;
     const std::filesystem::path procExe = std::filesystem::read_symlink("/proc/self/exe", error);
@@ -71,23 +69,34 @@ CommandLineOptions parseCommandLine(
     return options;
 }
 
-// Runs one avatar session. Returning Setup/Reload deliberately destroys the
-// current X11 window and microphone monitor, then main() rebuilds them cleanly
-// from the updated configuration. This is simpler and less error-prone than
-// mutating every subsystem in place.
+int idleBobOffset(
+    std::chrono::steady_clock::time_point now,
+    std::chrono::steady_clock::time_point started,
+    const AppConfig& config) {
+
+    if (!config.idleBob || config.idleBobPixels <= 0 || config.idleBobPeriodMilliseconds <= 0) {
+        return 0;
+    }
+
+    constexpr double tau = 6.28318530717958647692;
+    const double elapsedMs = std::chrono::duration<double, std::milli>(now - started).count();
+    const double phase = tau * elapsedMs / static_cast<double>(config.idleBobPeriodMilliseconds);
+    return static_cast<int>(std::lround(std::sin(phase) * config.idleBobPixels));
+}
+
 SessionResult runAvatarSession(
     const AppConfig& config,
     const std::filesystem::path& base) {
 
     AvatarSet avatar(resolvedAvatarDirectory(base, config).string());
 
-    // Reserve equal transparent padding above and below the avatar so the
-    // talking bounce can move upward without clipping the image.
     const int bounceMargin = config.talkingBounce ? config.bouncePixels : 0;
+    const int idleMargin = config.idleBob ? config.idleBobPixels : 0;
+    const int motionMargin = bounceMargin + idleMargin;
     const int windowWidth = std::max(1, static_cast<int>(std::ceil(avatar.maxWidth() * config.scale)));
     const int windowHeight = std::max(
         1,
-        static_cast<int>(std::ceil(avatar.maxHeight() * config.scale)) + bounceMargin * 2);
+        static_cast<int>(std::ceil(avatar.maxHeight() * config.scale)) + motionMargin * 2);
 
     X11AvatarWindow window(
         windowWidth,
@@ -101,8 +110,6 @@ SessionResult runAvatarSession(
         std::cerr << "Warning: no 32-bit X11 visual found; transparent PNG areas may appear opaque.\n";
     }
 
-    // Microphone support is optional. If the system lacks a PulseAudio-
-    // compatible recording service, direction tracking still works normally.
     std::unique_ptr<MicrophoneMonitor> microphone;
     if (config.microphoneEnabled) {
         microphone = std::make_unique<MicrophoneMonitor>(config.microphoneDevice);
@@ -114,18 +121,19 @@ SessionResult runAvatarSession(
 
     Direction currentDirection = Direction::Center;
     bool currentTalking = false;
-    int currentBounce = 0;
+    int currentVerticalOffset = 0;
 
-    window.draw(avatar.imageFor(currentDirection, currentTalking), config.scale, currentBounce);
+    window.draw(avatar.imageFor(currentDirection, currentTalking), config.scale, currentVerticalOffset);
     printRuntimeHelp();
 
     const auto directionInterval = std::chrono::milliseconds(config.updateMilliseconds);
     const auto microphoneRelease = std::chrono::milliseconds(config.microphoneReleaseMilliseconds);
     const auto bounceInterval = std::chrono::milliseconds(config.bounceIntervalMilliseconds);
 
-    auto nextDirectionUpdate = std::chrono::steady_clock::now();
+    const auto sessionStarted = std::chrono::steady_clock::now();
+    auto nextDirectionUpdate = sessionStarted;
     auto lastVoiceActivity = std::chrono::steady_clock::time_point::min();
-    auto talkingStarted = std::chrono::steady_clock::now();
+    auto talkingStarted = sessionStarted;
 
     while (window.processEvents()) {
         if (window.takeSetupRequest()) {
@@ -136,10 +144,7 @@ SessionResult runAvatarSession(
         const auto now = std::chrono::steady_clock::now();
         Direction nextDirection = currentDirection;
         bool nextTalking = currentTalking;
-        int nextBounce = currentBounce;
 
-        // Mouse direction can be intentionally polled slowly for a relaxed
-        // visual style. This setting is independent of microphone response.
         if (now >= nextDirectionUpdate) {
             int mouseX = 0;
             int mouseY = 0;
@@ -155,9 +160,6 @@ SessionResult runAvatarSession(
             nextDirectionUpdate = now + directionInterval;
         }
 
-        // Speech detection is deliberately only a volume threshold. The
-        // release timer prevents tiny gaps between words from flickering
-        // rapidly between idle and talking images.
         if (microphone && microphone->available()) {
             if (microphone->level() >= config.microphoneThreshold) {
                 lastVoiceActivity = now;
@@ -172,32 +174,27 @@ SessionResult runAvatarSession(
             nextTalking = false;
         }
 
-        // Bounce alternates between the normal position and a small upward
-        // offset while talking. The image itself is never transformed.
+        int talkingOffset = 0;
         if (nextTalking && config.talkingBounce && config.bouncePixels > 0) {
             const auto elapsed = now - talkingStarted;
             const auto phase = elapsed / bounceInterval;
-            nextBounce = (phase % 2 == 0) ? config.bouncePixels : 0;
-        } else {
-            nextBounce = 0;
+            talkingOffset = (phase % 2 == 0) ? config.bouncePixels : 0;
         }
 
-        // Redraw only when a visible state changes. During silence and while
-        // the mouse remains in one region, the window generates no draw work.
+        const int nextVerticalOffset = talkingOffset + idleBobOffset(now, sessionStarted, config);
+
         if (nextDirection != currentDirection ||
             nextTalking != currentTalking ||
-            nextBounce != currentBounce) {
+            nextVerticalOffset != currentVerticalOffset) {
             currentDirection = nextDirection;
             currentTalking = nextTalking;
-            currentBounce = nextBounce;
+            currentVerticalOffset = nextVerticalOffset;
             window.draw(
                 avatar.imageFor(currentDirection, currentTalking),
                 config.scale,
-                currentBounce);
+                currentVerticalOffset);
         }
 
-        // Waiting on the terminal replaces the old fixed sleep. poll(2) blocks
-        // for up to 5 ms, so this remains effectively idle when nothing happens.
         switch (waitForRuntimeCommand(5)) {
             case RuntimeCommand::Setup:
                 return SessionResult::Setup;
@@ -234,8 +231,6 @@ int main(int argc, char** argv) {
                 return 0;
             }
 
-            // Reload from disk so manual config.ini edits made while the avatar
-            // is running take effect with the R command as well.
             config = loadConfig(options.configPath.string());
             showSetup = (result == SessionResult::Setup);
         }
