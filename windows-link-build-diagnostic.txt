@@ -1,0 +1,9 @@
+lib_kernel32=0
+lib_user32=0
+lib_gdi32=0
+lib_gdiplus=0
+lib_winmm=0
+compile=0
+lld-link: error: undefined symbol: __chkstk
+>>> referenced by /home/runner/work/V_mini_me/V_mini_me/out-windows-x64/V_mini_me_win.obj:(bool __cdecl `anonymous namespace'::runSetup(struct `anonymous namespace'::AppConfig &))
+link=1
