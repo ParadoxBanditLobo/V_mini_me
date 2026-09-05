@@ -1,0 +1,50 @@
+name: Diagnose Windows launcher build
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-windows-launcher.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 unzip
+      - name: Download raylib
+        run: |
+          curl -L --fail --retry 3 https://github.com/raysan5/raylib/releases/download/6.0/raylib-6.0_win64_mingw-w64.zip -o /tmp/raylib-win64.zip
+          rm -rf /tmp/raylib-win64
+          mkdir -p /tmp/raylib-win64
+          unzip -q /tmp/raylib-win64.zip -d /tmp/raylib-win64
+      - name: Compile and capture diagnostics
+        shell: bash
+        run: |
+          set +e
+          RAYINC=$(find /tmp/raylib-win64 -type f -name raylib.h -printf '%h\n' | head -1)
+          RAYLIB=$(find /tmp/raylib-win64 -type f -name 'libraylib.a' | head -1)
+          mkdir -p out-windows-x64
+          x86_64-w64-mingw32-g++ \
+            -O2 -std=c++17 -Wall -Wextra -Wpedantic \
+            -I"$RAYINC" launcher/windows/V_mini_me_launcher.cpp "$RAYLIB" \
+            -static -static-libgcc -static-libstdc++ \
+            -lopengl32 -lgdi32 -lwinmm -lshell32 \
+            -o out-windows-x64/V_mini_me_launcher.exe \
+            > windows-launcher-build-diagnostic.txt 2>&1
+          echo "exit_code=$?" >> windows-launcher-build-diagnostic.txt
+          cat windows-launcher-build-diagnostic.txt
+          exit 0
+      - name: Commit diagnostic
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f windows-launcher-build-diagnostic.txt
+          git commit -m 'Capture Windows launcher build diagnostic [skip ci]' || exit 0
+          git push
