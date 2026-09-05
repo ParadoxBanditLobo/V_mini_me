@@ -1,0 +1,43 @@
+name: Diagnose Windows core build
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-windows-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld
+      - name: Compile and capture diagnostics
+        shell: bash
+        run: |
+          set +e
+          mkdir -p out-windows-x64
+          clang++ --target=x86_64-pc-windows-msvc \
+            -I"$PWD/src/windows" \
+            -c "$PWD/src/windows/V_mini_me_win_release.cpp" \
+            -o "$PWD/out-windows-x64/V_mini_me_win.obj" \
+            -O2 -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector \
+            -fno-builtin -nostdlib -nostdinc++ \
+            > windows-core-build-diagnostic.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> windows-core-build-diagnostic.txt
+          cat windows-core-build-diagnostic.txt
+          exit 0
+      - name: Commit diagnostic
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f windows-core-build-diagnostic.txt
+          git commit -m 'Capture Windows core build diagnostic [skip ci]' || exit 0
+          git push
