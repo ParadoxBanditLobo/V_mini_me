@@ -1,0 +1,12 @@
+In file included from launcher/windows/V_mini_me_launcher_build_v2.cpp:15:
+launcher/windows/V_mini_me_launcher.cpp: In function ‘int main()’:
+launcher/windows/V_mini_me_launcher.cpp:75:1: warning: this ‘if’ clause does not guard... [-Wmisleading-indentation]
+   75 | if(child.active)sendcmd(child,"q\n");closeChild(child);CloseWindow();return 0;}
+      | ^~
+launcher/windows/V_mini_me_launcher.cpp:75:38: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the ‘if’
+   75 | if(child.active)sendcmd(child,"q\n");closeChild(child);CloseWindow();return 0;}
+      |                                      ^~~~~~~~~~
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/raylib/raylib-6.0_win64_mingw-w64/lib/libraylib.a(rcore.o):rcore.c:(.text+0x22101): undefined reference to `stat64i32'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/raylib/raylib-6.0_win64_mingw-w64/lib/libraylib.a(rcore.o):rcore.c:(.text+0x23e83): undefined reference to `stat64i32'
+collect2: error: ld returned 1 exit status
+exit_code=1
