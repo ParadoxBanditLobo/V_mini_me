@@ -1,0 +1,120 @@
+name: Package Windows x64 test v3
+
+on:
+  push:
+    paths:
+      - '.github/workflows/package-windows-x64-test-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld mingw-w64 unzip zip file
+
+      - name: Build native Windows core
+        run: |
+          set -eux
+          OUT="$PWD/out-windows-x64"
+          mkdir -p "$OUT"
+          for lib in kernel32 user32 gdi32 gdiplus winmm; do
+            lld-link /lib /def:"$PWD/windows-build/$lib.def" /machine:x64 /out:"$OUT/$lib.lib"
+          done
+          clang++ --target=x86_64-pc-windows-msvc \
+            -I"$PWD/src/windows" \
+            -c "$PWD/src/windows/V_mini_me_win_release.cpp" \
+            -o "$OUT/V_mini_me_win.obj" \
+            -O2 -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector \
+            -mno-stack-arg-probe -fno-builtin -nostdlib -nostdinc++
+          lld-link \
+            /out:"$OUT/V_mini_me.exe" \
+            /entry:mainCRTStartup \
+            /subsystem:console,6.01 \
+            /machine:x64 /opt:ref /opt:icf \
+            "$OUT/V_mini_me_win.obj" \
+            "$OUT/kernel32.lib" "$OUT/user32.lib" "$OUT/gdi32.lib" \
+            "$OUT/gdiplus.lib" "$OUT/winmm.lib"
+          file "$OUT/V_mini_me.exe"
+
+      - name: Download raylib 6.0 Windows x64 MinGW
+        run: |
+          curl -L --fail --retry 3 https://github.com/raysan5/raylib/releases/download/6.0/raylib-6.0_win64_mingw-w64.zip -o /tmp/raylib-win64.zip
+          rm -rf /tmp/raylib-win64
+          mkdir -p /tmp/raylib-win64
+          unzip -q /tmp/raylib-win64.zip -d /tmp/raylib-win64
+
+      - name: Build Windows raylib launcher
+        run: |
+          set -eux
+          RAYINC=$(find /tmp/raylib-win64 -type f -name raylib.h -printf '%h\n' | head -1)
+          RAYLIB=$(find /tmp/raylib-win64 -type f -name 'libraylib.a' | head -1)
+          test -n "$RAYINC"
+          test -n "$RAYLIB"
+          x86_64-w64-mingw32-g++ \
+            -O2 -std=c++17 -Wall -Wextra -Wpedantic \
+            -I"$RAYINC" -Ilauncher/windows \
+            launcher/windows/V_mini_me_launcher_build.cpp "$RAYLIB" \
+            -static -static-libgcc -static-libstdc++ \
+            -lopengl32 -lgdi32 -lwinmm -lshell32 \
+            -o out-windows-x64/V_mini_me_launcher.exe
+          x86_64-w64-mingw32-strip out-windows-x64/V_mini_me_launcher.exe || true
+          file out-windows-x64/V_mini_me_launcher.exe
+
+      - name: Check imported DLLs
+        run: |
+          echo '--- core imports ---'
+          llvm-objdump -p out-windows-x64/V_mini_me.exe | grep 'DLL Name' || true
+          echo '--- launcher imports ---'
+          x86_64-w64-mingw32-objdump -p out-windows-x64/V_mini_me_launcher.exe | grep 'DLL Name' || true
+
+      - name: Assemble package
+        run: |
+          set -eux
+          PKG='V_mini_me-windows-x86_64-test'
+          rm -rf "$PKG" dist/windows
+          mkdir -p "$PKG" dist/windows
+          cp out-windows-x64/V_mini_me.exe "$PKG/V_mini_me.exe"
+          cp out-windows-x64/V_mini_me_launcher.exe "$PKG/V_mini_me_launcher.exe"
+          cp config.example.ini "$PKG/config.ini"
+          cp -a avatar "$PKG/avatar"
+          cp LICENSE "$PKG/LICENSE"
+          cat > "$PKG/README_WINDOWS_TEST.txt" <<'EOF'
+          V_mini_me Windows x86-64 test build
+
+          Recommended start: double-click V_mini_me_launcher.exe
+          Direct core start: double-click V_mini_me.exe
+
+          Functional target: match the Linux release behavior using Windows-native equivalents.
+          - same config.ini keys and avatar folder structure
+          - same direction modes and microphone reaction
+          - same talking bounce and idle bob/sway
+          - same Quick Expressions behavior
+          - same launcher controls and avatar/expression folder picker
+          - same Save / Start / Reload / Stop workflow
+
+          Core: native Win32/GDI+/WinMM.
+          Optional GUI: raylib.
+          Windows 10/11 are the intended initial targets.
+          EOF
+          sha256sum "$PKG/V_mini_me.exe" "$PKG/V_mini_me_launcher.exe" > "$PKG/SHA256SUMS.txt"
+          zip -r -9 "dist/windows/${PKG}.zip" "$PKG"
+          ls -lh "dist/windows/${PKG}.zip"
+
+      - name: Commit Windows package
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p launcher/bin/windows-x86_64
+          cp out-windows-x64/V_mini_me_launcher.exe launcher/bin/windows-x86_64/V_mini_me_launcher.exe
+          git add -f dist/windows/V_mini_me-windows-x86_64-test.zip launcher/bin/windows-x86_64/V_mini_me_launcher.exe
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Add Windows x64 functional parity test package [skip ci]'
+          git push
