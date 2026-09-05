@@ -1,0 +1,75 @@
+name: Package Linux folder picker test
+
+on:
+  push:
+    paths:
+      - '.github/workflows/package-linux-folder-picker-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ make pkg-config libpng-dev libx11-dev zip
+
+      - name: Build current Linux core
+        run: |
+          make -j2
+          strip V_mini_me || true
+          file V_mini_me
+
+      - name: Assemble unzip-and-test folder
+        run: |
+          PKG='V_mini_me-linux-x86_64-folder-picker-test'
+          rm -rf "$PKG" dist
+          mkdir -p "$PKG" dist
+          cp V_mini_me "$PKG/V_mini_me"
+          cp launcher/bin/linux-x86_64/V_mini_me_launcher "$PKG/V_mini_me_launcher"
+          chmod +x "$PKG/V_mini_me" "$PKG/V_mini_me_launcher"
+          cp config.example.ini "$PKG/config.ini"
+          cp -a avatar "$PKG/avatar"
+          cp LICENSE "$PKG/LICENSE"
+          cat > "$PKG/RUN.sh" <<'EOF'
+          #!/usr/bin/env sh
+          cd -- "$(dirname -- "$0")" || exit 1
+          exec ./V_mini_me_launcher
+          EOF
+          cat > "$PKG/RUN_CORE.sh" <<'EOF'
+          #!/usr/bin/env sh
+          cd -- "$(dirname -- "$0")" || exit 1
+          exec ./V_mini_me config.ini
+          EOF
+          chmod +x "$PKG/RUN.sh" "$PKG/RUN_CORE.sh"
+          cat > "$PKG/TEST_NOTES.txt" <<'EOF'
+          V_mini_me Linux folder-picker test build
+
+          RUN.sh      - opens the optional raylib GUI launcher
+          RUN_CORE.sh - starts the V_mini_me core directly
+
+          Launcher test:
+          - Click "Browse avatars" beside Avatar folder.
+          - It scans avatar/* beside the launcher.
+          - Only folders containing center.png are listed.
+          - Quick Expression slots have the same Browse picker.
+          - The text fields still accept manual/custom paths.
+          EOF
+          sha256sum "$PKG/V_mini_me" "$PKG/V_mini_me_launcher" > "$PKG/SHA256SUMS.txt"
+          zip -r -9 "dist/${PKG}.zip" "$PKG"
+          ls -lh "dist/${PKG}.zip"
+
+      - name: Commit test ZIP
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f dist/V_mini_me-linux-x86_64-folder-picker-test.zip
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Add Linux folder picker test package [skip ci]'
+          git push
