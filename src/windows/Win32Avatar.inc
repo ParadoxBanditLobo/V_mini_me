@@ -13,6 +13,7 @@ void freeAvatar(AvatarSet& avatar) {
     for (int i = 0; i < kDirectionCount; ++i) {
         freeImage(avatar.idle[i]);
         freeImage(avatar.talking[i]);
+        freeImage(avatar.shouting[i]);
     }
     avatar.maxWidth = avatar.maxHeight = 0;
 }
@@ -110,6 +111,17 @@ bool loadAvatar(const AppConfig& config, AvatarSet& avatar) {
             if (avatar.talking[direction].width > avatar.maxWidth) avatar.maxWidth = avatar.talking[direction].width;
             if (avatar.talking[direction].height > avatar.maxHeight) avatar.maxHeight = avatar.talking[direction].height;
         }
+        // All vocal states use the same directional names and PNG loader.
+        buildAvatarPath(path, avatarBase, direction, false);
+        int pathEnd = wlen(path);
+        if (pathEnd >= 4) {
+            path[pathEnd - 4] = 0;
+            wappend(path, kPathCapacity, L"_shouting.png");
+            if (fileExists(path) && loadPngScaled(path, config.scaleMilli, avatar.shouting[direction])) {
+                if (avatar.shouting[direction].width > avatar.maxWidth) avatar.maxWidth = avatar.shouting[direction].width;
+                if (avatar.shouting[direction].height > avatar.maxHeight) avatar.maxHeight = avatar.shouting[direction].height;
+            }
+        }
     }
     if (!avatar.idle[DIR_CENTER].loaded) {
         freeAvatar(avatar);
@@ -119,10 +131,12 @@ bool loadAvatar(const AppConfig& config, AvatarSet& avatar) {
     return true;
 }
 
-const ImageBitmap* imageFor(const AvatarSet& avatar, int direction, bool talking) {
-    if (talking && avatar.talking[direction].loaded) return &avatar.talking[direction];
+const ImageBitmap* imageFor(const AvatarSet& avatar, int direction, int speechState) {
+    if (speechState >= 2 && avatar.shouting[direction].loaded) return &avatar.shouting[direction];
+    if (speechState >= 1 && avatar.talking[direction].loaded) return &avatar.talking[direction];
     if (avatar.idle[direction].loaded) return &avatar.idle[direction];
-    if (talking && avatar.talking[DIR_CENTER].loaded) return &avatar.talking[DIR_CENTER];
+    if (speechState >= 2 && avatar.shouting[DIR_CENTER].loaded) return &avatar.shouting[DIR_CENTER];
+    if (speechState >= 1 && avatar.talking[DIR_CENTER].loaded) return &avatar.talking[DIR_CENTER];
     return &avatar.idle[DIR_CENTER];
 }
 

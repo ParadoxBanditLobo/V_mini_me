@@ -44,9 +44,9 @@ void stopMicrophone(MicrophoneMonitor& monitor) {
     memset(&monitor, 0, sizeof(monitor));
 }
 
-bool microphoneLoud(MicrophoneMonitor& monitor) {
-    if (!monitor.available) return false;
-    bool loud = false;
+int microphoneSpeechState(MicrophoneMonitor& monitor, int shoutThresholdMicro) {
+    if (!monitor.available) return 0;
+    int speechState = 0;
     for (int index = 0; index < 2; ++index) {
         WAVEHDR& header = monitor.headers[index];
         if ((header.dwFlags & WHDR_DONE) == 0) continue;
@@ -60,13 +60,18 @@ bool microphoneLoud(MicrophoneMonitor& monitor) {
             unsigned long long threshold = (unsigned long long)monitor.thresholdMicro * 32768ULL;
             threshold /= kThresholdBase;
             unsigned long long thresholdSquared = threshold * threshold;
-            if (sumSquares / (unsigned int)sampleCount >= thresholdSquared) loud = true;
+            const unsigned long long sampleMean = sumSquares / (unsigned int)sampleCount;
+            if (sampleMean >= thresholdSquared && speechState < 1) speechState = 1;
+            if (shoutThresholdMicro > 0) {
+                const unsigned long long shout = (unsigned long long)shoutThresholdMicro * 32768ULL / kThresholdBase;
+                if (sampleMean >= shout * shout) speechState = 2;
+            }
         }
         header.dwBytesRecorded = 0;
         header.dwFlags &= ~WHDR_DONE;
         waveInAddBuffer(monitor.handle, &header, sizeof(WAVEHDR));
     }
-    return loud;
+    return speechState;
 }
 
 // -------------------------------------------------------------------------
@@ -74,7 +79,7 @@ bool microphoneLoud(MicrophoneMonitor& monitor) {
 // -------------------------------------------------------------------------
 
 void renderWindow(WindowContext& context) {
-    const ImageBitmap* image = imageFor(*context.avatar, context.direction, context.talking);
+    const ImageBitmap* image = imageFor(*context.avatar, context.direction, context.speechState);
     if (!image || !image->loaded) return;
     SIZE_T canvasBytes = (SIZE_T)context.width * context.height * 4;
     memset(context.canvasBits, 0, canvasBytes);

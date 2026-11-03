@@ -46,7 +46,7 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
     DWORD lastVoiceActivity = now;
     DWORD talkingStarted = now;
     int currentDirection = DIR_CENTER;
-    bool currentTalking = false;
+    int currentSpeechState = 0;
     int currentVerticalOffset = 0;
     int currentHorizontalOffset = 0;
     gCurrentSwayOffset = 0;
@@ -68,7 +68,7 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
 
         now = GetTickCount();
         int nextDirection = currentDirection;
-        bool nextTalking = currentTalking;
+        int nextSpeechState = currentSpeechState;
 
         if ((long)(now - nextDirectionUpdate) >= 0) {
             POINT mouse{};
@@ -81,21 +81,24 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
         }
 
         if (microphone.available) {
-            if (microphoneLoud(microphone)) {
+            const int detected = microphoneSpeechState(
+                microphone, config->shoutingEnabled ? config->microphoneShoutThresholdMicro : 0);
+            if (detected > 0) {
                 lastVoiceActivity = now;
-                if (!nextTalking) {
-                    nextTalking = true;
-                    talkingStarted = now;
-                }
-            } else if (nextTalking && (DWORD)(now - lastVoiceActivity) >= (DWORD)config->microphoneReleaseMs) {
-                nextTalking = false;
+                if (nextSpeechState == 0) talkingStarted = now;
+                nextSpeechState = detected;
+            } else if (nextSpeechState != 0 &&
+                       (DWORD)(now - lastVoiceActivity) >= (DWORD)config->microphoneReleaseMs) {
+                nextSpeechState = 0;
+            } else if (nextSpeechState == 2) {
+                nextSpeechState = 1;
             }
         } else {
-            nextTalking = false;
+            nextSpeechState = 0;
         }
 
         int talkingOffset = 0;
-        if (nextTalking && config->talkingBounce && config->bouncePixels > 0) {
+        if (nextSpeechState != 0 && config->talkingBounce && config->bouncePixels > 0) {
             DWORD phase = (now - talkingStarted) / (DWORD)config->bounceIntervalMs;
             talkingOffset = (phase % 2 == 0) ? config->bouncePixels : 0;
         }
@@ -107,16 +110,16 @@ DWORD WINAPI avatarThread(LPVOID parameter) {
         const int nextHorizontalOffset = swayOffset;
 
         if (nextDirection != currentDirection ||
-            nextTalking != currentTalking ||
+            nextSpeechState != currentSpeechState ||
             nextVerticalOffset != currentVerticalOffset ||
             nextHorizontalOffset != currentHorizontalOffset) {
             currentDirection = nextDirection;
-            currentTalking = nextTalking;
+            currentSpeechState = nextSpeechState;
             currentVerticalOffset = nextVerticalOffset;
             currentHorizontalOffset = nextHorizontalOffset;
             gCurrentSwayOffset = currentHorizontalOffset;
             window.direction = currentDirection;
-            window.talking = currentTalking;
+            window.speechState = currentSpeechState;
             window.bounce = currentVerticalOffset;
             renderWindow(window);
         }

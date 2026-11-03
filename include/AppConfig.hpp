@@ -27,6 +27,8 @@ struct AppConfig {
     bool microphoneEnabled = true;
     std::string microphoneDevice;
     double microphoneThreshold = 0.035;
+    bool shoutingEnabled = false;
+    double microphoneShoutThreshold = 0.12;
     int microphoneReleaseMilliseconds = 250;
 
     // Talking bounce only changes the draw position; no physics or animation

@@ -167,3 +167,38 @@ Before adding a feature, ask:
 4. Can users who do not want it leave it completely disabled?
 
 If the answer to most of these is no, it probably does not belong in V_mini_me.
+
+
+## Upcoming development batches (post-v0.9.1)
+
+### Batch 1: Optional shouting PNG state
+
+Status: implemented in feature branch; requires build and runtime verification.
+
+- `shouting_enabled=false` retains the existing behavior by default.
+- `mic_shout_threshold=0.12` adds the higher microphone RMS threshold.
+- Optional `center_shouting.png`, `left_shouting.png`, etc.
+- Missing shouting images fall back to directional talking/idle PNGs.
+- No screen capture, extra microphone stream, or new dependencies.
+
+### Batch 2: Lightweight dance sequences
+
+Status: planned, not implemented.
+
+- Small text files with optional avatar folder, repeat setting, and direction/duration steps.
+- Start/stop via runtime controls. A dance temporarily overrides mouse direction.
+- Microphone speech state continues during the sequence.
+- Restore the previous avatar folder and mouse direction behavior when it ends.
+- Validate step count, timing and paths; no arbitrary script execution.
+
+### Batch 3: Integration and test packages
+
+- Expose a simple shout threshold control and dance start/stop in the optional launcher.
+- Test Linux/X11, Windows, and graceful fallback when files are absent.
+- Produce fresh ZIPs from the tested commit before requesting manual tests.
+
+### Deferred: right-click menu and resizing
+
+- A small popup menu could offer scaling and configuration.
+- OBS Display Capture normally includes popups; Window Capture may not capture a separate menu window.
+- No interactive resizing or context-menu work belongs in the shouting/dance batches.
