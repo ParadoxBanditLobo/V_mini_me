@@ -67,6 +67,8 @@ struct AppConfig {
     bool microphoneEnabled;
     int microphoneDevice;
     int microphoneThresholdMicro;
+    bool shoutingEnabled;
+    int microphoneShoutThresholdMicro;
     int microphoneReleaseMs;
     bool talkingBounce;
     int bouncePixels;
@@ -83,6 +85,7 @@ struct ImageBitmap {
 struct AvatarSet {
     ImageBitmap idle[kDirectionCount];
     ImageBitmap talking[kDirectionCount];
+    ImageBitmap shouting[kDirectionCount];
     int maxWidth;
     int maxHeight;
 };
@@ -115,7 +118,7 @@ struct WindowContext {
     AvatarSet* avatar;
     AppConfig* config;
     int direction;
-    bool talking;
+    int speechState;
     int bounce;
 };
 

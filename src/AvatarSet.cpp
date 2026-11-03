@@ -33,6 +33,13 @@ AvatarSet::AvatarSet(const std::string& directory) {
             idleImages_.emplace(direction, std::move(image));
         }
 
+        const fs::path shoutingPath = base / (name + "_shouting.png");
+        if (fs::exists(shoutingPath)) {
+            PngImage image = loadPng(shoutingPath.string());
+            maxWidth_ = std::max(maxWidth_, image.width);
+            maxHeight_ = std::max(maxHeight_, image.height);
+            shoutingImages_.emplace(direction, std::move(image));
+        }
         const fs::path talkingPath = base / (name + "_talking.png");
         if (fs::exists(talkingPath)) {
             PngImage image = loadPng(talkingPath.string());
@@ -43,28 +50,24 @@ AvatarSet::AvatarSet(const std::string& directory) {
     }
 }
 
-const PngImage& AvatarSet::imageFor(Direction direction, bool talking) const {
-    if (talking) {
-        const auto exactTalking = talkingImages_.find(direction);
-        if (exactTalking != talkingImages_.end()) {
-            return exactTalking->second;
-        }
+const PngImage& AvatarSet::imageFor(Direction direction, int speechState) const {
+    if (speechState >= 2) {
+        const auto image = shoutingImages_.find(direction);
+        if (image != shoutingImages_.end()) return image->second;
     }
-
-    // Preserve the current direction when a matching talking image is absent.
-    const auto exactIdle = idleImages_.find(direction);
-    if (exactIdle != idleImages_.end()) {
-        return exactIdle->second;
+    if (speechState >= 1) {
+        const auto image = talkingImages_.find(direction);
+        if (image != talkingImages_.end()) return image->second;
     }
-
-    // A pack containing only center_talking.png can still react to speech when
-    // the requested directional idle image is also absent.
-    if (talking) {
-        const auto centerTalking = talkingImages_.find(Direction::Center);
-        if (centerTalking != talkingImages_.end()) {
-            return centerTalking->second;
-        }
+    const auto idle = idleImages_.find(direction);
+    if (idle != idleImages_.end()) return idle->second;
+    if (speechState >= 2) {
+        const auto center = shoutingImages_.find(Direction::Center);
+        if (center != shoutingImages_.end()) return center->second;
     }
-
+    if (speechState >= 1) {
+        const auto center = talkingImages_.find(Direction::Center);
+        if (center != talkingImages_.end()) return center->second;
+    }
     return idleImages_.at(Direction::Center);
 }

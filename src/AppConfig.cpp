@@ -69,6 +69,8 @@ AppConfig loadConfig(const std::string& path) {
             else if (key == "mic_enabled") config.microphoneEnabled = parseBool(value);
             else if (key == "mic_device") config.microphoneDevice = value;
             else if (key == "mic_threshold") config.microphoneThreshold = std::stod(value);
+            else if (key == "shouting_enabled") config.shoutingEnabled = parseBool(value);
+            else if (key == "mic_shout_threshold") config.microphoneShoutThreshold = std::stod(value);
             else if (key == "mic_release_ms") config.microphoneReleaseMilliseconds = std::clamp(std::stoi(value), 0, 5000);
             else if (key == "talk_bounce") config.talkingBounce = parseBool(value);
             else if (key == "bounce_pixels") config.bouncePixels = std::clamp(std::stoi(value), 0, 200);
@@ -92,6 +94,7 @@ AppConfig loadConfig(const std::string& path) {
 
     config.deadzone = std::clamp(config.deadzone, 0.0, 0.95);
     config.microphoneThreshold = std::clamp(config.microphoneThreshold, 0.0, 1.0);
+    config.microphoneShoutThreshold = std::clamp(config.microphoneShoutThreshold, config.microphoneThreshold, 1.0);
     return config;
 }
 
@@ -124,7 +127,9 @@ void saveConfig(const AppConfig& config, const std::string& path) {
          << "mic_enabled=" << (config.microphoneEnabled ? "true" : "false") << "\n"
          << "mic_device=" << config.microphoneDevice << "\n"
          << "mic_threshold=" << std::setprecision(4) << config.microphoneThreshold << "\n"
-         << "mic_release_ms=" << config.microphoneReleaseMilliseconds << "\n\n"
+         << "mic_release_ms=" << config.microphoneReleaseMilliseconds << "\n"
+         << "shouting_enabled=" << (config.shoutingEnabled ? "true" : "false") << "\n"
+         << "mic_shout_threshold=" << config.microphoneShoutThreshold << "\n\n"
          << "talk_bounce=" << (config.talkingBounce ? "true" : "false") << "\n"
          << "bounce_pixels=" << config.bouncePixels << "\n"
          << "bounce_interval_ms=" << config.bounceIntervalMilliseconds << "\n\n"

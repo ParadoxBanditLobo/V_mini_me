@@ -16,7 +16,7 @@ public:
     // Returns the best image for the requested direction/talking combination.
     // Fallback order while talking is:
     //   exact talking image -> exact idle image -> center_talking -> center.
-    const PngImage& imageFor(Direction direction, bool talking = false) const;
+    const PngImage& imageFor(Direction direction, int speechState = 0) const;
 
     int maxWidth() const { return maxWidth_; }
     int maxHeight() const { return maxHeight_; }
@@ -24,6 +24,7 @@ public:
 private:
     std::map<Direction, PngImage> idleImages_;
     std::map<Direction, PngImage> talkingImages_;
+    std::map<Direction, PngImage> shoutingImages_;
     int maxWidth_ = 0;
     int maxHeight_ = 0;
 };

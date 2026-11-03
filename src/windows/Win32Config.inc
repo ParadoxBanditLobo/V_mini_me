@@ -28,6 +28,8 @@ void setDefaults(AppConfig& config) {
     config.microphoneEnabled = true;
     config.microphoneDevice = -1;
     config.microphoneThresholdMicro = 35000;
+    config.shoutingEnabled = false;
+    config.microphoneShoutThresholdMicro = 120000;
     config.microphoneReleaseMs = 250;
     config.talkingBounce = true;
     config.bouncePixels = 4;
@@ -154,6 +156,10 @@ void applyConfigValue(AppConfig& config, const char* key, int keyLength, const c
         if (valueLength > 0) config.microphoneDevice = parseIntA(value, valueLength, -1);
     } else if (akeyEqual(key, keyLength, "mic_threshold")) {
         config.microphoneThresholdMicro = parseFixedA(value, valueLength, kThresholdBase, config.microphoneThresholdMicro);
+    } else if (akeyEqual(key, keyLength, "shouting_enabled")) {
+        config.shoutingEnabled = parseBoolA(value, valueLength, config.shoutingEnabled);
+    } else if (akeyEqual(key, keyLength, "mic_shout_threshold")) {
+        config.microphoneShoutThresholdMicro = parseFixedA(value, valueLength, kThresholdBase, config.microphoneShoutThresholdMicro);
     } else if (akeyEqual(key, keyLength, "mic_release_ms")) {
         config.microphoneReleaseMs = parseIntA(value, valueLength, config.microphoneReleaseMs);
     } else if (akeyEqual(key, keyLength, "talk_bounce")) {
@@ -189,6 +195,8 @@ void clampConfig(AppConfig& config) {
     if (config.scaleMilli > 8000) config.scaleMilli = 8000;
     if (config.microphoneThresholdMicro < 100) config.microphoneThresholdMicro = 100;
     if (config.microphoneThresholdMicro > kThresholdBase) config.microphoneThresholdMicro = kThresholdBase;
+    if (config.microphoneShoutThresholdMicro < config.microphoneThresholdMicro) config.microphoneShoutThresholdMicro = config.microphoneThresholdMicro;
+    if (config.microphoneShoutThresholdMicro > kThresholdBase) config.microphoneShoutThresholdMicro = kThresholdBase;
     if (config.microphoneReleaseMs < 0) config.microphoneReleaseMs = 0;
     if (config.bouncePixels < 0) config.bouncePixels = 0;
     if (config.bouncePixels > 1000) config.bouncePixels = 1000;
@@ -300,6 +308,8 @@ bool saveConfig(const AppConfig& config) {
     appendA(output, outputCapacity, at, "\r\n\r\n# Microphone reaction\r\nmic_enabled="); appendA(output, outputCapacity, at, config.microphoneEnabled ? "true" : "false");
     appendA(output, outputCapacity, at, "\r\nmic_device="); if (config.microphoneDevice >= 0) appendIntA(output, outputCapacity, at, config.microphoneDevice);
     appendA(output, outputCapacity, at, "\r\nmic_threshold="); appendFixedA(output, outputCapacity, at, config.microphoneThresholdMicro, kThresholdBase, 6);
+    appendA(output, outputCapacity, at, "\r\nshouting_enabled="); appendA(output, outputCapacity, at, config.shoutingEnabled ? "true" : "false");
+    appendA(output, outputCapacity, at, "\r\nmic_shout_threshold="); appendFixedA(output, outputCapacity, at, config.microphoneShoutThresholdMicro, kThresholdBase, 6);
     appendA(output, outputCapacity, at, "\r\nmic_release_ms="); appendIntA(output, outputCapacity, at, config.microphoneReleaseMs);
     appendA(output, outputCapacity, at, "\r\ntalk_bounce="); appendA(output, outputCapacity, at, config.talkingBounce ? "true" : "false");
     appendA(output, outputCapacity, at, "\r\nbounce_pixels="); appendIntA(output, outputCapacity, at, config.bouncePixels);

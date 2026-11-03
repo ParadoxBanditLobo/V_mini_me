@@ -128,12 +128,12 @@ SessionResult runAvatarSession(
     }
 
     Direction currentDirection = Direction::Center;
-    bool currentTalking = false;
+    int currentSpeechState = 0;
     int currentVerticalOffset = 0;
     int currentHorizontalOffset = 0;
 
     window.draw(
-        avatar.imageFor(currentDirection, currentTalking),
+        avatar.imageFor(currentDirection, currentSpeechState),
         config.scale,
         currentVerticalOffset,
         currentHorizontalOffset);
@@ -156,7 +156,7 @@ SessionResult runAvatarSession(
 
         const auto now = std::chrono::steady_clock::now();
         Direction nextDirection = currentDirection;
-        bool nextTalking = currentTalking;
+        int nextSpeechState = currentSpeechState;
 
         if (now >= nextDirectionUpdate) {
             int mouseX = 0;
@@ -174,21 +174,23 @@ SessionResult runAvatarSession(
         }
 
         if (microphone && microphone->available()) {
-            if (microphone->level() >= config.microphoneThreshold) {
+            const double level = microphone->level();
+            if (level >= config.microphoneThreshold) {
                 lastVoiceActivity = now;
-                if (!nextTalking) {
-                    nextTalking = true;
-                    talkingStarted = now;
-                }
-            } else if (nextTalking && now - lastVoiceActivity >= microphoneRelease) {
-                nextTalking = false;
+                if (nextSpeechState == 0) talkingStarted = now;
+                nextSpeechState = (config.shoutingEnabled &&
+                    level >= config.microphoneShoutThreshold) ? 2 : 1;
+            } else if (nextSpeechState != 0 && now - lastVoiceActivity >= microphoneRelease) {
+                nextSpeechState = 0;
+            } else if (nextSpeechState == 2) {
+                nextSpeechState = 1;
             }
         } else {
-            nextTalking = false;
+            nextSpeechState = 0;
         }
 
         int talkingOffset = 0;
-        if (nextTalking && config.talkingBounce && config.bouncePixels > 0) {
+        if (nextSpeechState != 0 && config.talkingBounce && config.bouncePixels > 0) {
             const auto elapsed = now - talkingStarted;
             const auto phase = elapsed / bounceInterval;
             talkingOffset = (phase % 2 == 0) ? config.bouncePixels : 0;
@@ -211,15 +213,15 @@ SessionResult runAvatarSession(
         const int nextHorizontalOffset = swayOffset;
 
         if (nextDirection != currentDirection ||
-            nextTalking != currentTalking ||
+            nextSpeechState != currentSpeechState ||
             nextVerticalOffset != currentVerticalOffset ||
             nextHorizontalOffset != currentHorizontalOffset) {
             currentDirection = nextDirection;
-            currentTalking = nextTalking;
+            currentSpeechState = nextSpeechState;
             currentVerticalOffset = nextVerticalOffset;
             currentHorizontalOffset = nextHorizontalOffset;
             window.draw(
-                avatar.imageFor(currentDirection, currentTalking),
+                avatar.imageFor(currentDirection, currentSpeechState),
                 config.scale,
                 currentVerticalOffset,
                 currentHorizontalOffset);
